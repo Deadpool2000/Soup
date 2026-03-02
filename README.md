@@ -13,7 +13,15 @@
   <a href="#features">Features</a> &middot;
   <a href="#data-tools">Data Tools</a> &middot;
   <a href="#experiment-tracking">Tracking</a> &middot;
-  <a href="#model-evaluation">Eval</a>
+  <a href="#model-evaluation">Eval</a> &middot;
+  <a href="#all-commands">Commands</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  <img src="https://img.shields.io/badge/tests-147%20passed-brightgreen" alt="Tests">
+  <a href="https://github.com/MakazhanAlpamys/Soup/actions"><img src="https://github.com/MakazhanAlpamys/Soup/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
 ---
@@ -245,6 +253,27 @@ soup eval --model ./output --benchmarks mmlu --run-id run_20260223_143052_a1b2
 | Web dashboard | 🔜 |
 | Cloud mode (BYOG) | 🔜 |
 
+## All Commands
+
+```
+soup init [--template chat|code|medical]      Create soup.yaml config
+soup train --config soup.yaml [--dry-run]     Start training
+soup chat --model ./output                    Interactive chat with model
+soup push --model ./output --repo user/name   Upload to HuggingFace Hub
+soup data inspect <path>                      View dataset stats
+soup data validate <path> --format alpaca     Check format
+soup data convert <path> --to chatml          Convert between formats
+soup data merge data1.jsonl data2.jsonl       Combine datasets
+soup data dedup <path> --threshold 0.8        Remove duplicates (MinHash)
+soup data stats <path>                        Extended statistics
+soup runs                                     List all training runs
+soup runs show <run_id>                       Detailed run info + loss graph
+soup runs compare <run_1> <run_2>             Compare two runs
+soup runs delete <run_id>                     Remove a run
+soup eval --model ./output --benchmarks mmlu  Evaluate on benchmarks
+soup version                                  Show version
+```
+
 ## Requirements
 
 - Python 3.9+
@@ -258,7 +287,10 @@ git clone https://github.com/MakazhanAlpamys/Soup.git
 cd Soup
 pip install -e ".[dev]"
 
-# Run unit tests (fast, no GPU needed)
+# Lint
+ruff check soup_cli/ tests/
+
+# Run unit tests (fast, no GPU needed — 147 tests)
 pytest tests/ -v
 
 # Run smoke tests (downloads tiny model, runs real training)
