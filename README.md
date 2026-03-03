@@ -21,7 +21,7 @@
   <a href="https://pypi.org/project/soup-cli/"><img src="https://img.shields.io/pypi/v/soup-cli?color=blue" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-  <img src="https://img.shields.io/badge/tests-184%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-186%20passed-brightgreen" alt="Tests">
   <a href="https://github.com/MakazhanAlpamys/Soup/actions"><img src="https://github.com/MakazhanAlpamys/Soup/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -372,7 +372,7 @@ pip install -e ".[dev]"
 # Lint
 ruff check soup_cli/ tests/
 
-# Run unit tests (fast, no GPU needed — 184 tests)
+# Run unit tests (fast, no GPU needed — 186 tests)
 pytest tests/ -v
 
 # Run smoke tests (downloads tiny model, runs real training)
