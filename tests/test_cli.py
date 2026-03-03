@@ -2,6 +2,7 @@
 
 from typer.testing import CliRunner
 
+from soup_cli import __version__
 from soup_cli.cli import app
 
 runner = CliRunner()
@@ -10,7 +11,7 @@ runner = CliRunner()
 def test_version():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "0.2.0" in result.output
+    assert __version__ in result.output
 
 
 def test_help():
