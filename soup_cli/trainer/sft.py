@@ -137,6 +137,15 @@ class SFTTrainerWrapper:
             output_dir = output_dir / cfg.experiment_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # --- Calculate warmup steps from ratio ---
+        import math
+
+        total_steps = (
+            math.ceil(len(train_ds) / batch_size / tcfg.gradient_accumulation_steps)
+            * tcfg.epochs
+        )
+        warmup_steps = int(total_steps * tcfg.warmup_ratio)
+
         # --- Training args ---
         training_args = TrainingArguments(
             output_dir=str(output_dir),
@@ -144,7 +153,7 @@ class SFTTrainerWrapper:
             per_device_train_batch_size=batch_size,
             gradient_accumulation_steps=tcfg.gradient_accumulation_steps,
             learning_rate=tcfg.lr,
-            warmup_ratio=tcfg.warmup_ratio,
+            warmup_steps=warmup_steps,
             weight_decay=tcfg.weight_decay,
             max_grad_norm=tcfg.max_grad_norm,
             optim=tcfg.optimizer,

@@ -194,7 +194,7 @@ def _merge_adapter(adapter_path: str, base_model: str, output_dir: str):
     console.print(f"[dim]Loading base model: {base_model}...[/]")
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         trust_remote_code=True,
         device_map="cpu",
     )

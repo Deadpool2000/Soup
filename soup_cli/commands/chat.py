@@ -179,7 +179,7 @@ def _load_model(
             base_model,
             trust_remote_code=True,
             device_map="auto",
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
         )
         console.print(f"[dim]Loading LoRA adapter: {model_path}...[/]")
         model_obj = PeftModel.from_pretrained(base, model_path)
@@ -189,7 +189,7 @@ def _load_model(
             model_path,
             trust_remote_code=True,
             device_map="auto",
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
         )
 
     model_obj.eval()

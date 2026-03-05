@@ -91,12 +91,12 @@ def merge(
             "bfloat16": torch.bfloat16,
             "float32": torch.float32,
         }
-        torch_dtype = dtype_map[dtype]
+        model_dtype = dtype_map[dtype]
 
         console.print(f"[dim]Loading base model: {base}...[/]")
         model = AutoModelForCausalLM.from_pretrained(
             base,
-            torch_dtype=torch_dtype,
+            dtype=model_dtype,
             trust_remote_code=True,
             device_map="cpu",
         )
