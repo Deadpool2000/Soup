@@ -354,10 +354,10 @@ Shows: Python version, GPU availability, all dependency versions, and fix sugges
 Soup shows friendly error messages by default (2-3 lines with a fix suggestion). For full tracebacks:
 
 ```bash
-# Any command with --verbose
-soup train --config soup.yaml --verbose
+# Global flag goes BEFORE the command
+soup --verbose train --config soup.yaml
 
-# Global flag works with all commands
+# Works with any command
 soup --verbose eval --model ./output --benchmarks mmlu
 ```
 
