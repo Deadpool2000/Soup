@@ -15,10 +15,17 @@ console = Console()
 class SFTTrainerWrapper:
     """High-level wrapper that sets up model + tokenizer + trainer from SoupConfig."""
 
-    def __init__(self, config: SoupConfig, device: str = "cuda", report_to: str = "none"):
+    def __init__(
+        self,
+        config: SoupConfig,
+        device: str = "cuda",
+        report_to: str = "none",
+        deepspeed_config: Optional[str] = None,
+    ):
         self.config = config
         self.device = device
         self.report_to = report_to
+        self.deepspeed_config = deepspeed_config
         self.model = None
         self.tokenizer = None
         self.trainer = None
@@ -164,6 +171,7 @@ class SFTTrainerWrapper:
             bf16=self.device == "cuda",
             report_to=self.report_to,
             remove_unused_columns=False,
+            deepspeed=self.deepspeed_config,
         )
 
         # --- Trainer ---

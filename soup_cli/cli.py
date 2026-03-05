@@ -4,7 +4,21 @@ import typer
 from rich.console import Console
 
 from soup_cli import __version__
-from soup_cli.commands import chat, data, eval, export, init, merge, push, runs, train
+from soup_cli.commands import (
+    chat,
+    data,
+    diff,
+    eval,
+    export,
+    generate,
+    init,
+    merge,
+    push,
+    runs,
+    serve,
+    sweep,
+    train,
+)
 
 console = Console()
 
@@ -28,6 +42,12 @@ app.add_typer(
 )
 app.add_typer(runs.app, name="runs", help="Experiment tracking: list, show, compare runs.")
 app.command(name="eval")(eval.eval_model)
+app.command()(serve.serve)
+app.command()(sweep.sweep)
+app.command(name="diff")(diff.diff)
+
+# Register data generate as a subcommand of data
+data.app.command(name="generate")(generate.generate)
 
 
 @app.command()

@@ -21,7 +21,7 @@
   <a href="https://pypi.org/project/soup-cli/"><img src="https://img.shields.io/pypi/v/soup-cli?color=blue" alt="PyPI"></a>
   <img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
-  <img src="https://img.shields.io/badge/tests-186%20passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-281%20passed-brightgreen" alt="Tests">
   <a href="https://github.com/MakazhanAlpamys/Soup/actions"><img src="https://github.com/MakazhanAlpamys/Soup/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 </p>
 
@@ -228,6 +228,102 @@ soup train --config soup.yaml --wandb
 
 Make sure `WANDB_API_KEY` is set or run `wandb login` first.
 
+## Inference Server
+
+Start a local OpenAI-compatible inference server:
+
+```bash
+# Install server dependencies
+pip install 'soup-cli[serve]'
+
+# Start server
+soup serve --model ./output --port 8000
+
+# With custom settings
+soup serve --model ./output --port 8080 --host 127.0.0.1 --max-tokens 1024
+```
+
+Endpoints:
+- `POST /v1/chat/completions` — chat completions (streaming supported)
+- `GET /v1/models` — list available models
+- `GET /health` — health check
+
+Compatible with OpenAI SDK:
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
+response = client.chat.completions.create(
+    model="output",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
+## Synthetic Data Generation
+
+Generate training data using LLMs:
+
+```bash
+# Generate using OpenAI API
+soup data generate --prompt "Create math word problems" --count 100 --format alpaca
+
+# Use a different model
+soup data generate --prompt "Medical Q&A pairs" --model gpt-4o --count 500
+
+# Deduplicate against existing data
+soup data generate --prompt "..." --count 200 --dedup-with existing.jsonl
+
+# Use seed examples to guide style
+soup data generate --prompt "..." --seed examples.jsonl --count 100
+```
+
+## Hyperparameter Sweep
+
+Search for the best hyperparameters:
+
+```bash
+# Grid search over learning rate and LoRA rank
+soup sweep --config soup.yaml --param lr=1e-5,2e-5,5e-5 --param lora_r=8,16,32
+
+# Random search with max runs
+soup sweep --config soup.yaml --param lr=1e-5,2e-5,5e-5 --strategy random --max-runs 5
+
+# Preview without running
+soup sweep --config soup.yaml --param lr=1e-5,2e-5 --param epochs=2,3 --dry-run
+```
+
+## Model Comparison
+
+Compare outputs of two models side-by-side:
+
+```bash
+# Compare with inline prompts
+soup diff --model-a ./model_v1 --model-b ./model_v2 --prompt "Explain gravity"
+
+# Compare with a prompts file
+soup diff --model-a ./base --model-b ./finetuned --prompts test_prompts.jsonl
+
+# Save results
+soup diff --model-a ./a --model-b ./b --prompts prompts.txt --output results.jsonl
+```
+
+## Multi-GPU / DeepSpeed
+
+Train on multiple GPUs with DeepSpeed:
+
+```bash
+# ZeRO Stage 2 (recommended for most cases)
+soup train --config soup.yaml --deepspeed zero2
+
+# ZeRO Stage 3 (for very large models)
+soup train --config soup.yaml --deepspeed zero3
+
+# ZeRO Stage 2 with CPU offload (memory-constrained)
+soup train --config soup.yaml --deepspeed zero2_offload
+
+# Custom DeepSpeed config
+soup train --config soup.yaml --deepspeed ./my_ds_config.json
+```
+
 ## Data Formats
 
 Soup supports these formats (auto-detected):
@@ -328,6 +424,11 @@ soup eval --model ./output --benchmarks mmlu --run-id run_20260223_143052_a1b2
 | Experiment tracking (SQLite) | ✅ |
 | Data tools (convert, merge, dedup, stats) | ✅ |
 | Model evaluation (lm-eval) | ✅ |
+| Inference server (OpenAI-compatible) | ✅ |
+| Synthetic data generation | ✅ |
+| Hyperparameter sweep (grid/random) | ✅ |
+| Model comparison (diff) | ✅ |
+| Multi-GPU / DeepSpeed | ✅ |
 | Web dashboard | 🔜 |
 | Cloud mode (BYOG) | 🔜 |
 
@@ -353,6 +454,11 @@ soup runs show <run_id>                       Detailed run info + loss graph
 soup runs compare <run_1> <run_2>             Compare two runs
 soup runs delete <run_id>                     Remove a run
 soup eval --model ./output --benchmarks mmlu  Evaluate on benchmarks
+soup serve --model ./output --port 8000       OpenAI-compatible API server
+soup sweep --config soup.yaml --param lr=...  Hyperparameter search
+soup diff --model-a ./a --model-b ./b         Compare two models
+soup data generate --prompt "..." --count 100 Generate synthetic data
+soup train --deepspeed zero2                  Multi-GPU with DeepSpeed
 soup version                                  Show version
 ```
 
@@ -372,7 +478,7 @@ pip install -e ".[dev]"
 # Lint
 ruff check soup_cli/ tests/
 
-# Run unit tests (fast, no GPU needed — 186 tests)
+# Run unit tests (fast, no GPU needed — 281 tests)
 pytest tests/ -v
 
 # Run smoke tests (downloads tiny model, runs real training)

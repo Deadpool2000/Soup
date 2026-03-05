@@ -61,6 +61,16 @@ soup train --config soup.yaml
 
 **W&B integration:** `commands/train.py` supports `--wandb` flag to enable Weights & Biases logging. Sets `report_to="wandb"` in TrainingArguments. Requires `pip install wandb`.
 
+**Serve:** `commands/serve.py` starts a local inference server with OpenAI-compatible API (`/v1/chat/completions`, `/v1/models`, `/health`). Uses FastAPI + uvicorn. Supports LoRA adapters and full models, SSE streaming. Requires `pip install 'soup-cli[serve]'`.
+
+**Data generate:** `commands/generate.py` generates synthetic training data using LLMs. Supports OpenAI API and local models as providers. Outputs in alpaca/sharegpt/chatml format. Validates on the fly and can deduplicate against existing datasets. Registered as `soup data generate`.
+
+**Sweep:** `commands/sweep.py` runs hyperparameter search (grid or random) over training parameters. Uses shortcut names (lr, epochs, lora_r, etc.) or dot notation. Each run is saved to the experiment tracker. Supports `--dry-run` to preview combinations.
+
+**Diff:** `commands/diff.py` compares outputs of two models side-by-side on the same prompts. Computes metrics (length, word count, word overlap). Supports JSONL prompt files and CLI prompt arguments.
+
+**DeepSpeed:** `utils/deepspeed.py` provides ZeRO Stage 2/3 config templates. `commands/train.py` supports `--deepspeed zero2|zero3|zero2_offload|<path>`. Trainers (SFT/DPO) pass `deepspeed` to HF TrainingArguments. Requires `pip install 'soup-cli[deepspeed]'`.
+
 ## Code Conventions
 
 - **Line length:** 100 chars (ruff enforced)
@@ -89,7 +99,7 @@ soup train --config soup.yaml
 
 ## Tests
 
-Test suite (~184 tests) lives in `tests/`:
+Test suite (~281 tests) lives in `tests/`:
 
 | File | Covers |
 |---|---|
@@ -113,3 +123,8 @@ Test suite (~184 tests) lives in `tests/`:
 | `test_merge.py` | Merge command, adapter detection, validation |
 | `test_export.py` | Export command, GGUF quant types, validation |
 | `test_resume.py` | Resume checkpoint resolution, W&B flag |
+| `test_serve.py` | Serve command, FastAPI app, endpoints, streaming |
+| `test_generate.py` | Data generate, JSON parsing, validation, prompts |
+| `test_sweep.py` | Sweep params parsing, combinations, nested config |
+| `test_diff.py` | Diff prompts collection, metrics, CLI |
+| `test_deepspeed.py` | DeepSpeed configs, multi-GPU detection, trainer integration |

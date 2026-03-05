@@ -44,6 +44,11 @@ def train(
         "--wandb",
         help="Enable Weights & Biases logging",
     ),
+    deepspeed: str = typer.Option(
+        None,
+        "--deepspeed",
+        help="Enable DeepSpeed: zero2, zero3, zero2_offload, or path to config JSON",
+    ),
 ):
     """Start training from a soup.yaml config."""
     config_path = Path(config)
@@ -78,6 +83,13 @@ def train(
                 "Run: [bold]pip install wandb[/]"
             )
             raise typer.Exit(1)
+
+    # --- DeepSpeed setup ---
+    ds_config_path = None
+    if deepspeed:
+        ds_config_path = _resolve_deepspeed(deepspeed)
+        if ds_config_path:
+            console.print(f"[green]DeepSpeed enabled:[/] {deepspeed}")
 
     # Detect hardware
     device, device_name = detect_device()
@@ -128,9 +140,13 @@ def train(
     if cfg.task == "dpo":
         from soup_cli.trainer.dpo import DPOTrainerWrapper
 
-        trainer_wrapper = DPOTrainerWrapper(cfg, device=device, report_to=report_to)
+        trainer_wrapper = DPOTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
     else:
-        trainer_wrapper = SFTTrainerWrapper(cfg, device=device, report_to=report_to)
+        trainer_wrapper = SFTTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
     trainer_wrapper.setup(dataset)
 
     # Train with live display and experiment tracking
@@ -171,6 +187,26 @@ def train(
             title="[bold green]Training Complete![/]",
         )
     )
+
+
+def _resolve_deepspeed(deepspeed: str) -> str:
+    """Resolve DeepSpeed config: named preset or path to JSON file."""
+    from soup_cli.utils.deepspeed import CONFIGS, write_deepspeed_config
+
+    # Named preset
+    if deepspeed in CONFIGS:
+        return write_deepspeed_config(deepspeed)
+
+    # Path to config file
+    ds_path = Path(deepspeed)
+    if ds_path.exists() and ds_path.suffix == ".json":
+        return str(ds_path)
+
+    console.print(
+        f"[red]Invalid DeepSpeed config: {deepspeed}[/]\n"
+        f"Options: {', '.join(CONFIGS.keys())} or path to JSON file."
+    )
+    raise typer.Exit(1)
 
 
 def _resolve_checkpoint(resume: str, output_dir: str, experiment_name: str = None) -> str:

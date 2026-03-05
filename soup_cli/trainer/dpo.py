@@ -21,10 +21,17 @@ class DPOTrainerWrapper:
     - rejected: the less preferred response
     """
 
-    def __init__(self, config: SoupConfig, device: str = "cuda", report_to: str = "none"):
+    def __init__(
+        self,
+        config: SoupConfig,
+        device: str = "cuda",
+        report_to: str = "none",
+        deepspeed_config: Optional[str] = None,
+    ):
         self.config = config
         self.device = device
         self.report_to = report_to
+        self.deepspeed_config = deepspeed_config
         self.model = None
         self.ref_model = None
         self.tokenizer = None
@@ -154,6 +161,7 @@ class DPOTrainerWrapper:
             bf16=self.device == "cuda",
             report_to=self.report_to,
             remove_unused_columns=False,
+            deepspeed=self.deepspeed_config,
             beta=tcfg.dpo_beta,
             max_length=cfg.data.max_length,
             max_prompt_length=cfg.data.max_length // 2,
