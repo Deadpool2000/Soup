@@ -28,4 +28,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest tests/ -v --tb=short
+      - run: pytest tests/ -v --tb=short --junitxml=report.xml
+      - name: Update test count badge
+        if: matrix.python-version == '3.11' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          TESTS=$(python -c "
+          import xml.etree.ElementTree as ET
+          root = ET.parse('report.xml').getroot()
+          print(root.attrib.get('tests', '0'))
+          ")
+          echo "Test count: $TESTS"
+          curl -s -o /dev/null -w "%{http_code}" \
+            -X PATCH \
+            -H "Authorization: token ${{ secrets.GIST_TOKEN }}" \
+            -d "{\"files\":{\"soup_tests.json\":{\"content\":\"{\\\"schemaVersion\\\":1,\\\"label\\\":\\\"tests\\\",\\\"message\\\":\\\"$TESTS passed\\\",\\\"color\\\":\\\"brightgreen\\\"}\"}}}" \
+            "https://api.github.com/gists/65fdc943f85f3b2c46ecddb415c2b779"
