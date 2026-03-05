@@ -35,7 +35,8 @@ jobs:
           TESTS=$(python -c "
           import xml.etree.ElementTree as ET
           root = ET.parse('report.xml').getroot()
-          print(root.attrib.get('tests', '0'))
+          ts = root.find('testsuite')
+          print(ts.attrib.get('tests', '0') if ts is not None else root.attrib.get('tests', '0'))
           ")
           echo "Test count: $TESTS"
           curl -s -o /dev/null -w "%{http_code}" \
