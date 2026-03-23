@@ -20,6 +20,7 @@ from soup_cli.commands import (
     serve,
     sweep,
     train,
+    ui,
 )
 from soup_cli.commands import doctor as doctor_cmd
 from soup_cli.commands import quickstart as quickstart_cmd
@@ -54,6 +55,7 @@ app.command()(sweep.sweep)
 app.command(name="diff")(diff.diff)
 app.command()(doctor_cmd.doctor)
 app.command()(quickstart_cmd.quickstart)
+app.command()(ui.ui)
 
 # Register data generate as a subcommand of data
 data.app.command(name="generate")(generate.generate)

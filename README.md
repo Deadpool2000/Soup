@@ -533,6 +533,27 @@ soup version --full
 # → soup v0.4.0 | Python 3.11.5 | CUDA 12.1 | extras: serve, data
 ```
 
+## Web UI
+
+Launch a local web interface to manage experiments, start training, explore data, and chat with models — all from your browser.
+
+```bash
+pip install 'soup-cli[ui]'
+soup ui
+# → opens http://127.0.0.1:7860 in your browser
+```
+
+**Pages:**
+- **Dashboard** — view all experiment runs, loss charts, system info
+- **New Training** — create configs from templates, validate, and start training
+- **Data Explorer** — browse and inspect datasets (JSONL, JSON, CSV, Parquet)
+- **Model Chat** — chat with a running `soup serve` inference server
+
+```bash
+# Custom port, don't auto-open browser
+soup ui --port 8080 --no-browser
+```
+
 ## Error Handling
 
 Soup shows friendly error messages by default (2-3 lines with a fix suggestion). For full tracebacks:
@@ -659,6 +680,7 @@ soup data generate --prompt "..." --count 100 Generate synthetic data
 soup runs                                     List training runs
 soup runs show <run_id>                       Run details + loss graph
 soup runs compare <run_1> <run_2>             Compare two runs
+soup ui [--port 7860]                         Web UI (experiments, training, data)
 soup doctor                                   Check environment
 soup quickstart [--dry-run]                   Full demo
 soup version [--full]                         Show version (--full: system info)
@@ -678,6 +700,7 @@ soup --verbose <command>                      Full traceback on errors
 | `vision` | `pip install 'soup-cli[vision]'` | Vision/multimodal fine-tuning (Pillow) |
 | `qat` | `pip install 'soup-cli[qat]'` | Quantization-Aware Training (torchao) |
 | `fast` | `pip install 'soup-cli[fast]'` | Unsloth backend (2-5x faster, -80% VRAM) |
+| `ui` | `pip install 'soup-cli[ui]'` | Web UI + inference server (FastAPI + uvicorn) |
 | `serve` | `pip install 'soup-cli[serve]'` | Inference server (FastAPI + uvicorn) |
 | `data` | `pip install 'soup-cli[data]'` | Deduplication (MinHash via datasketch) |
 | `eval` | `pip install 'soup-cli[eval]'` | Benchmark evaluation (lm-evaluation-harness) |

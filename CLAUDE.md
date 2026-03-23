@@ -83,6 +83,8 @@ soup train --config soup.yaml
 
 **Quickstart:** `commands/quickstart.py` runs a complete demo — creates 20-example alpaca dataset, TinyLlama config, and trains a LoRA adapter. Supports `--dry-run` to create files only.
 
+**Web UI:** `commands/ui.py` launches a local web interface via `soup ui`. `ui/app.py` creates a FastAPI app with REST API endpoints for experiment management (`/api/runs`, `/api/runs/{id}/metrics`), config validation (`/api/config/validate`), training control (`/api/train/start`, `/api/train/status`, `/api/train/stop`), data inspection (`/api/data/inspect`), system info (`/api/system`), and templates (`/api/templates`). `ui/static/` contains a self-contained SPA (HTML/CSS/JS) with four pages: Dashboard (experiments list, loss charts via Chart.js), New Training (config editor with templates), Data Explorer (browse datasets), and Model Chat (chat with a `soup serve` instance). Config validation uses `config/loader.py`'s `load_config_from_string()`. Requires `pip install 'soup-cli[ui]'`. Auto-opens browser on launch (disable with `--no-browser`).
+
 **Confirmation prompts:** `commands/train.py` and `commands/sweep.py` ask for confirmation before starting. Skip with `--yes` / `-y`.
 
 **Version:** `cli.py` `version()` command supports `--full` flag that shows version, Python version, GPU backend, and installed optional extras in one line.
@@ -171,3 +173,4 @@ Test suite lives in `tests/`:
 | `test_unsloth.py` | Unsloth backend config, detection, trainer integration, templates |
 | `test_vision.py` | Vision modality config, LLaVA/ShareGPT4V formats, loader, trainer, templates |
 | `test_qat.py` | QAT config, validation, trainer integration, export compatibility |
+| `test_ui.py` | Web UI command, FastAPI endpoints, static files, config validation |

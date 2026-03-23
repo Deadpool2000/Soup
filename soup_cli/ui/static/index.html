@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soup — Web UI</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">Soup</div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-page="training" onclick="navigate('training')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>New Training</span>
+        </button>
+        <button class="nav-item" data-page="data" onclick="navigate('data')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>Data Explorer</span>
+        </button>
+        <button class="nav-item" data-page="chat" onclick="navigate('chat')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Model Chat</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer" id="sidebar-version">Soup Web UI</div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+
+      <!-- Dashboard Page -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h1 class="page-title">Dashboard</h1>
+          <button class="btn" onclick="loadDashboard()">Refresh</button>
+        </div>
+        <div id="dashboard-content">
+          <div style="text-align:center;padding:3rem;color:var(--text-dim)">Loading...</div>
+        </div>
+      </div>
+
+      <!-- New Training Page -->
+      <div id="page-training" class="page">
+        <div class="page-header">
+          <h1 class="page-title">New Training</h1>
+        </div>
+        <div id="training-content">
+          <div style="text-align:center;padding:3rem;color:var(--text-dim)">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Data Explorer Page -->
+      <div id="page-data" class="page">
+        <div class="page-header">
+          <h1 class="page-title">Data Explorer</h1>
+        </div>
+        <div class="card">
+          <div class="card-title">Load Dataset</div>
+          <div style="display:flex; gap:0.75rem; align-items:flex-end">
+            <div class="form-group" style="flex:1; margin-bottom:0">
+              <label class="form-label">File Path</label>
+              <input type="text" id="data-path" placeholder="./data/train.jsonl">
+            </div>
+            <div class="form-group" style="width:100px; margin-bottom:0">
+              <label class="form-label">Limit</label>
+              <input type="number" id="data-limit" value="50" min="1" max="500">
+            </div>
+            <button class="btn btn-primary" onclick="inspectData()" style="margin-bottom:0">Inspect</button>
+          </div>
+        </div>
+        <div id="data-content">
+          <div class="empty-state">
+            <div class="empty-state-text">Enter a file path to explore your dataset</div>
+            <div class="empty-state-hint">Supports JSONL, JSON, CSV, and Parquet files</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Chat Page -->
+      <div id="page-chat" class="page">
+        <div class="page-header">
+          <h1 class="page-title">Model Chat</h1>
+          <button class="btn" onclick="clearChat()">Clear Chat</button>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div style="display:flex; gap:0.75rem; align-items:flex-end">
+            <div class="form-group" style="flex:1; margin-bottom:0">
+              <label class="form-label">Inference Server URL</label>
+              <input type="text" id="chat-server" placeholder="http://localhost:8000" value="http://localhost:8000">
+            </div>
+          </div>
+        </div>
+        <div class="card chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <div class="empty-state">
+              <div class="empty-state-text">No messages yet</div>
+              <div class="empty-state-hint">Start a <code>soup serve</code> server and start chatting</div>
+            </div>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type a message..." onkeydown="handleChatKey(event)">
+            <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Run Detail Modal -->
+  <div class="modal-overlay" id="run-modal" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Run Details</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="run-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

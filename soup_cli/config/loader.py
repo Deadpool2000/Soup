@@ -29,3 +29,23 @@ def load_config(path: Path) -> SoupConfig:
         raise SystemExit(1)
 
     return config
+
+
+def load_config_from_string(yaml_str: str) -> SoupConfig:
+    """Parse a YAML string and return validated SoupConfig.
+
+    Unlike load_config(), raises ValueError on errors instead of SystemExit,
+    making it suitable for API/UI usage.
+    """
+    raw = yaml.safe_load(yaml_str)
+    if raw is None:
+        raise ValueError("Config is empty")
+
+    try:
+        return SoupConfig(**raw)
+    except ValidationError as exc:
+        errors = []
+        for err in exc.errors():
+            loc = " → ".join(str(part) for part in err["loc"])
+            errors.append(f"{loc}: {err['msg']}")
+        raise ValueError("; ".join(errors))
