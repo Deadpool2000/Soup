@@ -1,7 +1,7 @@
 <svg width="100%" viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 
   <!-- Left: PNG logo -->
-  <image xlink:href="soup.png" x="10" y="10" width="180" height="220" preserveAspectRatio="xMidYMid meet"/>
+  <image xlink:href="https://raw.githubusercontent.com/MakazhanAlpamys/Soup/main/soup.png" x="10" y="10" width="180" height="220" preserveAspectRatio="xMidYMid meet"/>
 
   <!-- Right: Text content -->
   <g>
