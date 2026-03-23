@@ -1,0 +1,30 @@
+# RLHF Step 1: Supervised Fine-Tuning (SFT)
+# Pre-train the model before reward model training
+# Use high-quality examples
+
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+data:
+  path: examples/data/alpaca_tiny.jsonl
+  format: alpaca
+task: sft
+backend: transformers
+quantization: null
+lora_r: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - v_proj
+batch_size: 16
+gradient_accumulation_steps: 1
+num_epochs: 1
+learning_rate: 5e-4
+lr_scheduler_type: linear
+warmup_ratio: 0.05
+weight_decay: 0.0
+max_seq_length: 2048
+output_dir: ./output_rlhf_sft/
+seed: 42
+logging_steps: 10
+save_steps: 50
+save_strategy: steps

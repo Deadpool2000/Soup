@@ -1,0 +1,32 @@
+# SFT Basic Example
+# Fine-tune TinyLlama-1.1B on instruction-following data
+# Quick to train (2-3 minutes on consumer GPU) — perfect for testing
+
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+data:
+  path: examples/data/alpaca_tiny.jsonl
+  format: alpaca
+task: sft
+backend: transformers
+quantization: null
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - v_proj
+batch_size: 16
+gradient_accumulation_steps: 1
+num_epochs: 1
+learning_rate: 5e-4
+lr_scheduler_type: linear
+warmup_ratio: 0.05
+weight_decay: 0.0
+max_seq_length: 512
+output_dir: ./output_sft_basic/
+seed: 42
+logging_steps: 10
+save_steps: 50
+eval_steps: 50
+eval_strategy: steps
+load_best_model_at_end: false

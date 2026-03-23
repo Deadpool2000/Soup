@@ -89,6 +89,8 @@ soup train --config soup.yaml
 
 **Web UI:** `commands/ui.py` launches a local web interface via `soup ui`. `ui/app.py` creates a FastAPI app with REST API endpoints for experiment management (`/api/runs`, `/api/runs/{id}/metrics`), config validation (`/api/config/validate`), training control (`/api/train/start`, `/api/train/status`, `/api/train/stop`), data inspection (`/api/data/inspect`), system info (`/api/system`), and templates (`/api/templates`). `ui/static/` contains a self-contained SPA (HTML/CSS/JS) with four pages: Dashboard (experiments list, loss charts via Chart.js), New Training (config editor with templates), Data Explorer (browse datasets), and Model Chat (chat with a `soup serve` instance). Config validation uses `config/loader.py`'s `load_config_from_string()`. Requires `pip install 'soup-cli[ui]'`. Auto-opens browser on launch (disable with `--no-browser`).
 
+**Community & Examples:** `CONTRIBUTING.md` provides full contributor guide (fork, test, lint, code style, PR process). `CODE_OF_CONDUCT.md` uses Contributor Covenant v2.1. `SECURITY.md` documents responsive disclosure policy (48h response, severity levels). `.github/FUNDING.yml` adds GitHub Sponsors + Buy Me a Coffee buttons. `examples/` folder includes 7 real YAML configs (SFT, DPO, GRPO, Vision, RLHF 3-stage), 3 sample JSONL datasets, and comprehensive README with quick-start examples.
+
 **Confirmation prompts:** `commands/train.py` and `commands/sweep.py` ask for confirmation before starting. Skip with `--yes` / `-y`.
 
 **Version:** `cli.py` `version()` command supports `--full` flag that shows version, Python version, GPU backend, and installed optional extras in one line.

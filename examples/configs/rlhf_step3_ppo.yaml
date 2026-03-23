@@ -1,0 +1,33 @@
+# RLHF Step 3: PPO Training
+# Optimize with reinforcement learning using the reward model
+# Generates outputs and ranks them with the reward model
+
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+data:
+  path: examples/data/alpaca_tiny.jsonl
+  format: alpaca
+task: ppo
+backend: transformers
+quantization: null
+lora_r: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - v_proj
+batch_size: 8
+gradient_accumulation_steps: 2
+num_epochs: 2
+learning_rate: 1e-5
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_seq_length: 2048
+output_dir: ./output_ppo/
+seed: 42
+ppo_epochs: 4
+ppo_clip_ratio: 0.2
+ppo_kl_penalty: 0.05
+reward_model: ./output_reward_model/
+logging_steps: 10
+save_steps: 50

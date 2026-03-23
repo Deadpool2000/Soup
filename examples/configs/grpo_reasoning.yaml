@@ -1,0 +1,34 @@
+# GRPO Reasoning Example
+# Fine-tune a reasoning model (math, logic, step-by-step)
+# Uses Group Relative Policy Optimization to select best outputs
+
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+data:
+  path: examples/data/reasoning_math.jsonl
+  format: alpaca
+task: grpo
+backend: transformers
+quantization: null
+lora_r: 64
+lora_alpha: 128
+lora_dropout: 0.05
+lora_target_modules:
+  - q_proj
+  - v_proj
+batch_size: 8
+gradient_accumulation_steps: 2
+num_epochs: 2
+learning_rate: 1e-4
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_seq_length: 2048
+output_dir: ./output_reasoning/
+seed: 42
+grpo_beta: 0.05
+num_generations: 4
+reward_fn: accuracy  # built-in reward function
+logging_steps: 10
+save_steps: 50
+eval_steps: 50
+eval_strategy: steps

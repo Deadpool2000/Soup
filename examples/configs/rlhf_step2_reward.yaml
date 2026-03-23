@@ -1,0 +1,24 @@
+# RLHF Step 2: Train Reward Model
+# Learn to score responses: is this output good or bad?
+# Uses preference pairs (chosen vs rejected)
+
+model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+data:
+  path: examples/data/chat_preferences.jsonl  # must have chosen/rejected
+  format: sharegpt
+task: reward_model
+backend: transformers
+quantization: null
+batch_size: 8
+gradient_accumulation_steps: 2
+num_epochs: 2
+learning_rate: 1e-4
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_seq_length: 2048
+output_dir: ./output_reward_model/
+seed: 42
+logging_steps: 10
+save_steps: 50
+save_strategy: steps
