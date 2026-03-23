@@ -8,6 +8,8 @@ Custom reward functions can be loaded from a Python file with a
 `reward_fn(completions, **kwargs)` callable.
 """
 
+from __future__ import annotations
+
 import importlib.util
 import re
 from pathlib import Path
