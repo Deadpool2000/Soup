@@ -607,6 +607,13 @@ class TestTransformersBackendUnchanged:
 class TestServeCliRegistration:
     """Test serve command is properly registered."""
 
+    @staticmethod
+    def _strip_ansi(text: str) -> str:
+        """Remove ANSI escape codes from text."""
+        import re
+
+        return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
     def test_serve_help_shows_backend(self):
         """soup serve --help should mention --backend flag."""
         from typer.testing import CliRunner
@@ -616,7 +623,8 @@ class TestServeCliRegistration:
         runner = CliRunner()
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
-        assert "--backend" in result.output
+        clean = self._strip_ansi(result.output)
+        assert "--backend" in clean
 
     def test_serve_help_shows_tensor_parallel(self):
         """soup serve --help should mention --tensor-parallel flag."""
@@ -627,7 +635,8 @@ class TestServeCliRegistration:
         runner = CliRunner()
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
-        assert "--tensor-parallel" in result.output
+        clean = self._strip_ansi(result.output)
+        assert "--tensor-parallel" in clean
 
     def test_serve_help_shows_gpu_memory(self):
         """soup serve --help should mention --gpu-memory flag."""
@@ -638,7 +647,8 @@ class TestServeCliRegistration:
         runner = CliRunner()
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
-        assert "--gpu-memory" in result.output
+        clean = self._strip_ansi(result.output)
+        assert "--gpu-memory" in clean
 
 
 # ============================================================
