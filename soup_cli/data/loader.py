@@ -6,7 +6,7 @@ from pathlib import Path
 from rich.console import Console
 
 from soup_cli.config.schema import DataConfig
-from soup_cli.data.formats import detect_format, format_to_messages
+from soup_cli.data.formats import detect_format, format_to_messages, is_vision_format
 
 console = Console()
 
@@ -101,6 +101,11 @@ def load_dataset(data_config: DataConfig) -> dict:
     formatted = [format_to_messages(row, fmt) for row in raw_data]
     formatted = [r for r in formatted if r is not None]  # filter failed rows
 
+    # Validate image paths for vision formats
+    if is_vision_format(fmt):
+        image_dir = Path(data_config.image_dir) if data_config.image_dir else path.parent
+        formatted = _validate_vision_images(formatted, image_dir)
+
     # Split into train/val
     if data_config.val_split > 0:
         split_idx = int(len(formatted) * (1 - data_config.val_split))
@@ -110,6 +115,29 @@ def load_dataset(data_config: DataConfig) -> dict:
         }
 
     return {"train": formatted}
+
+
+def _validate_vision_images(data: list[dict], image_dir: Path) -> list[dict]:
+    """Validate and resolve image paths in vision dataset rows.
+
+    Each row must have an 'image' key with a filename or path.
+    Resolves relative paths against image_dir.
+    """
+    valid = []
+    missing = 0
+    for row in data:
+        if "image" not in row or not row["image"]:
+            missing += 1
+            continue
+        image_path = Path(row["image"])
+        if not image_path.is_absolute():
+            image_path = image_dir / image_path
+        row["image"] = str(image_path)
+        valid.append(row)
+
+    if missing > 0:
+        console.print(f"[yellow]Warning: {missing} rows skipped (missing image path)[/]")
+    return valid
 
 
 def _load_hf_dataset(name: str, data_config: DataConfig) -> dict:

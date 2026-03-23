@@ -17,12 +17,16 @@ class LoraConfig(BaseModel):
 
 class DataConfig(BaseModel):
     train: str = Field(..., description="Path to training data or HF dataset name")
-    format: Literal["alpaca", "sharegpt", "chatml", "dpo", "auto"] = Field(
+    format: Literal["alpaca", "sharegpt", "chatml", "dpo", "llava", "sharegpt4v", "auto"] = Field(
         default="auto",
         description="Data format",
     )
     val_split: float = Field(default=0.1, ge=0.0, le=0.5, description="Validation split ratio")
     max_length: int = Field(default=2048, description="Max sequence length in tokens")
+    image_dir: Optional[str] = Field(
+        default=None,
+        description="Base directory for resolving relative image paths in vision datasets",
+    )
 
 
 class TrainingConfig(BaseModel):
@@ -67,6 +71,10 @@ class SoupConfig(BaseModel):
 
     base: str = Field(..., description="Base model name or path (HF model ID)")
     task: Literal["sft", "dpo", "grpo"] = Field(default="sft", description="Training task type")
+    modality: Literal["text", "vision"] = Field(
+        default="text",
+        description="Training modality: text (default) or vision (multimodal)",
+    )
     backend: Literal["transformers", "unsloth"] = Field(
         default="transformers",
         description="Training backend: transformers (default) or unsloth (2-5x faster)",
@@ -156,6 +164,33 @@ training:
   grpo_beta: 0.1
   num_generations: 4
   reward_fn: accuracy
+
+output: ./output
+""",
+    "vision": """# Soup template: Vision / Multimodal
+# Fine-tune a vision-language model for image understanding
+
+base: meta-llama/Llama-3.2-11B-Vision-Instruct
+task: sft
+modality: vision
+# backend: unsloth  # 2-5x faster, pip install 'soup-cli[fast]'
+
+data:
+  train: ./data/vision_train.jsonl
+  format: llava
+  image_dir: ./data/images
+  val_split: 0.1
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-5
+  batch_size: auto
+  lora:
+    r: 64
+    alpha: 16
+    target_modules: auto
+  quantization: 4bit
 
 output: ./output
 """,

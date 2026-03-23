@@ -5,6 +5,8 @@ Supported formats:
 - sharegpt: {"conversations": [{"from": "human", "value": ...}, ...]}
 - chatml: {"messages": [{"role": "user", "content": ...}, ...]}
 - dpo: {"prompt": ..., "chosen": ..., "rejected": ...}
+- llava: {"image": ..., "conversations": [{"from": "human", "value": ...}, ...]}
+- sharegpt4v: {"image": ..., "conversations": [{"from": "human", "value": ...}, ...]}
 """
 
 from typing import Optional
@@ -19,6 +21,8 @@ FORMAT_SIGNATURES = {
     "sharegpt": {"conversations"},
     "chatml": {"messages"},
     "dpo": {"prompt", "chosen", "rejected"},
+    "llava": {"image", "conversations"},
+    "sharegpt4v": {"image", "conversations"},
 }
 
 
@@ -30,7 +34,10 @@ def detect_format(data: list[dict]) -> str:
     sample = data[0]
     keys = set(sample.keys())
 
-    for fmt, required_keys in FORMAT_SIGNATURES.items():
+    # Check more specific formats first (llava/sharegpt4v before sharegpt)
+    check_order = ["alpaca", "llava", "dpo", "sharegpt", "chatml"]
+    for fmt in check_order:
+        required_keys = FORMAT_SIGNATURES[fmt]
         if required_keys.issubset(keys):
             return fmt
 
@@ -38,7 +45,8 @@ def detect_format(data: list[dict]) -> str:
         f"Cannot detect format. Keys found: {keys}. "
         f"Expected one of: alpaca (instruction, output), "
         f"sharegpt (conversations), chatml (messages), "
-        f"dpo (prompt, chosen, rejected)"
+        f"dpo (prompt, chosen, rejected), "
+        f"llava/sharegpt4v (image, conversations)"
     )
 
 
@@ -46,6 +54,7 @@ def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
     """Convert any format to unified messages format for training.
 
     Returns: {"messages": [{"role": ..., "content": ...}, ...]}
+    For vision formats, also includes "image" key.
     """
     try:
         if fmt == "chatml":
@@ -56,6 +65,8 @@ def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
             return _convert_sharegpt(row)
         elif fmt == "dpo":
             return _convert_dpo(row)
+        elif fmt in ("llava", "sharegpt4v"):
+            return _convert_vision(row)
         else:
             raise ValueError(f"Unknown format: {fmt}")
     except (KeyError, TypeError, IndexError):
@@ -104,6 +115,32 @@ def _convert_dpo(row: dict) -> dict:
         "chosen": row["chosen"],
         "rejected": row["rejected"],
     }
+
+
+def _convert_vision(row: dict) -> dict:
+    """Convert LLaVA / ShareGPT4V vision format to unified messages + image.
+
+    Input: {"image": "path.jpg", "conversations": [{"from": "human", "value": ...}, ...]}
+    Output: {"messages": [...], "image": "path.jpg"}
+    """
+    conversations = row["conversations"]
+    role_map = {"human": "user", "gpt": "assistant", "system": "system"}
+
+    messages = []
+    for turn in conversations:
+        role = role_map.get(turn["from"], turn["from"])
+        messages.append({"role": role, "content": turn["value"]})
+
+    result = {"messages": messages, "image": row["image"]}
+    # Preserve optional id field
+    if "id" in row:
+        result["id"] = row["id"]
+    return result
+
+
+def is_vision_format(fmt: str) -> bool:
+    """Check if a format is a vision/multimodal format."""
+    return fmt in ("llava", "sharegpt4v")
 
 
 # --- Reverse conversion: messages → target format ---

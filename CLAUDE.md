@@ -39,11 +39,11 @@ soup train --config soup.yaml
   → save LoRA adapter to output/
 ```
 
-**Config system:** `config/schema.py` is the single source of truth. All YAML fields are validated by Pydantic models (`SoupConfig` → `TrainingConfig` → `LoraConfig`, `DataConfig`). Templates (chat/code/medical) live as YAML strings in this file.
+**Config system:** `config/schema.py` is the single source of truth. All YAML fields are validated by Pydantic models (`SoupConfig` → `TrainingConfig` → `LoraConfig`, `DataConfig`). Templates (chat/code/medical/reasoning/vision) live as YAML strings in this file. `SoupConfig.modality` supports `text` (default) and `vision` for multimodal fine-tuning. `DataConfig.format` includes `llava` and `sharegpt4v` for vision datasets, and `DataConfig.image_dir` specifies the base directory for resolving image paths.
 
-**Data pipeline:** `data/loader.py` handles local files (JSONL/JSON/CSV/Parquet) and HuggingFace datasets. `data/formats.py` auto-detects and normalizes alpaca/sharegpt/chatml formats into a unified `{"messages": [...]}` structure. Also supports reverse conversion via `messages_to_format()`.
+**Data pipeline:** `data/loader.py` handles local files (JSONL/JSON/CSV/Parquet) and HuggingFace datasets. `data/formats.py` auto-detects and normalizes alpaca/sharegpt/chatml/llava/sharegpt4v formats into a unified `{"messages": [...]}` structure. Vision formats (llava, sharegpt4v) also include an `"image"` key. Also supports reverse conversion via `messages_to_format()`. Vision datasets get image path validation via `_validate_vision_images()`.
 
-**Trainer:** `trainer/sft.py` (`SFTTrainerWrapper`), `trainer/dpo.py` (`DPOTrainerWrapper`), and `trainer/grpo.py` (`GRPOTrainerWrapper`) wrap HuggingFace's SFTTrainer/DPOTrainer/GRPOTrainer with auto quantization (BitsAndBytes), LoRA (PEFT), and batch size estimation. Heavy ML imports are lazy (inside methods) so CLI stays fast for non-training commands. All trainers enable Rich progress bars for HuggingFace Hub model downloads via `_enable_hf_transfer_progress()`. All trainers support `backend: unsloth` — when enabled, model loading is delegated to `utils/unsloth.py` which uses `unsloth.FastLanguageModel` for 2-5x faster training.
+**Trainer:** `trainer/sft.py` (`SFTTrainerWrapper`), `trainer/dpo.py` (`DPOTrainerWrapper`), and `trainer/grpo.py` (`GRPOTrainerWrapper`) wrap HuggingFace's SFTTrainer/DPOTrainer/GRPOTrainer with auto quantization (BitsAndBytes), LoRA (PEFT), and batch size estimation. Heavy ML imports are lazy (inside methods) so CLI stays fast for non-training commands. All trainers enable Rich progress bars for HuggingFace Hub model downloads via `_enable_hf_transfer_progress()`. All trainers support `backend: unsloth` — when enabled, model loading is delegated to `utils/unsloth.py` which uses `unsloth.FastLanguageModel` for 2-5x faster training. SFT trainer supports `modality: vision` — uses `AutoModelForVision2Seq` + `AutoProcessor` for vision-language models (LLaMA-Vision, Qwen2-VL, Pixtral).
 
 **Unsloth backend:** `utils/unsloth.py` provides `is_unsloth_available()`, `get_unsloth_version()`, and `load_model_and_tokenizer()`. The latter uses `FastLanguageModel.from_pretrained()` + `FastLanguageModel.get_peft_model()` which handles quantization, LoRA patching, and kernel optimization internally. Config: `backend: unsloth` (default: `transformers`). Install: `pip install 'soup-cli[fast]'`. Auto-detection: if unsloth is installed but not enabled, `commands/train.py` shows a hint.
 
@@ -167,3 +167,4 @@ Test suite lives in `tests/`:
 | `test_grpo.py` | GRPO config, rewards, data prep, template, sweep shortcuts |
 | `test_progress.py` | Rich download progress bar, `_enable_hf_transfer_progress` |
 | `test_unsloth.py` | Unsloth backend config, detection, trainer integration, templates |
+| `test_vision.py` | Vision modality config, LLaVA/ShareGPT4V formats, loader, trainer, templates |

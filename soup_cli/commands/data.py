@@ -46,6 +46,9 @@ def inspect(
     stats_table.add_row("Duplicates", str(result["duplicates"]))
     console.print(stats_table)
 
+    # Vision stats (if dataset contains images)
+    _show_vision_stats(data)
+
     # Print sample rows
     if rows > 0 and len(data) > 0:
         console.print(f"\n[bold]Sample rows ({min(rows, len(data))}):[/]")
@@ -362,6 +365,44 @@ def stats(
         console.print(
             "\n[dim]Install plotext for histograms:[/] [bold]pip install plotext[/]"
         )
+
+
+def _show_vision_stats(data: list[dict]) -> None:
+    """Show image statistics if dataset contains image fields."""
+    if not data:
+        return
+
+    # Check if this is a vision dataset
+    sample = data[0]
+    if "image" not in sample:
+        return
+
+    total = len(data)
+    has_image = sum(1 for row in data if row.get("image"))
+    missing_image = total - has_image
+
+    # Collect image file info
+    extensions: dict[str, int] = {}
+    existing = 0
+    for row in data:
+        img_path = row.get("image", "")
+        if not img_path:
+            continue
+        ext = Path(img_path).suffix.lower()
+        extensions[ext] = extensions.get(ext, 0) + 1
+        if Path(img_path).exists():
+            existing += 1
+
+    vision_table = Table(title="Vision Stats")
+    vision_table.add_column("Metric", style="bold")
+    vision_table.add_column("Value")
+    vision_table.add_row("Images referenced", str(has_image))
+    vision_table.add_row("Missing image field", str(missing_image))
+    vision_table.add_row("Images found on disk", str(existing))
+    if extensions:
+        ext_str = ", ".join(f"{ext} ({count})" for ext, count in sorted(extensions.items()))
+        vision_table.add_row("Image formats", ext_str)
+    console.print(vision_table)
 
 
 def _write_jsonl(path: Path, data: list[dict]) -> None:

@@ -68,6 +68,7 @@ soup init --template chat       # conversational fine-tune
 soup init --template code       # code generation
 soup init --template medical    # domain expert
 soup init --template reasoning  # GRPO reasoning training
+soup init --template vision     # vision/multimodal fine-tune
 ```
 
 ### 3. Train
@@ -156,6 +157,55 @@ training:
 Works with all training tasks: SFT, DPO, and GRPO. If unsloth is installed but not enabled, Soup will suggest it automatically.
 
 > **Tip:** Soup auto-detects unsloth. When installed, you'll see a hint during `soup train` if you haven't enabled it yet.
+
+## Vision / Multimodal Fine-tuning
+
+Fine-tune vision-language models (LLaMA-3.2-Vision, Qwen2-VL, Pixtral) on image+text data:
+
+```bash
+# Install vision support
+pip install 'soup-cli[vision]'
+
+# Create a vision config
+soup init --template vision
+
+# Train
+soup train --config soup.yaml
+```
+
+```yaml
+base: meta-llama/Llama-3.2-11B-Vision-Instruct
+task: sft
+modality: vision
+
+data:
+  train: ./data/vision_train.jsonl
+  format: llava
+  image_dir: ./data/images
+  val_split: 0.1
+
+training:
+  epochs: 3
+  lr: 1e-5
+  quantization: 4bit
+  lora:
+    r: 64
+    alpha: 16
+```
+
+**Supported vision data formats:**
+
+**LLaVA:**
+```json
+{"image": "photo.jpg", "conversations": [{"from": "human", "value": "<image>\nDescribe this image."}, {"from": "gpt", "value": "A cat on a mat."}]}
+```
+
+**ShareGPT4V:**
+```json
+{"image": "chart.png", "conversations": [{"from": "human", "value": "<image>\nWhat does this show?"}, {"from": "gpt", "value": "Quarterly revenue."}]}
+```
+
+`soup data inspect` automatically shows image statistics (count, formats, missing files) for vision datasets.
 
 ## DPO Training
 
@@ -486,6 +536,16 @@ Soup supports these formats (auto-detected). Files can be JSONL, JSON, CSV, or P
 {"prompt": "Explain gravity", "chosen": "Gravity is a force...", "rejected": "I don't know"}
 ```
 
+**LLaVA (vision):**
+```json
+{"image": "photo.jpg", "conversations": [{"from": "human", "value": "<image>\nDescribe this."}, {"from": "gpt", "value": "A cat."}]}
+```
+
+**ShareGPT4V (vision):**
+```json
+{"image": "chart.png", "conversations": [{"from": "human", "value": "<image>\nExplain this chart."}, {"from": "gpt", "value": "Revenue growth."}]}
+```
+
 ## Data Tools
 
 ```bash
@@ -544,7 +604,7 @@ soup eval --model ./output --benchmarks mmlu --run-id run_20260223_143052_a1b2
 ## All Commands
 
 ```
-soup init [--template chat|code|medical|reasoning]  Create config
+soup init [--template chat|code|medical|reasoning|vision]  Create config
 soup train --config soup.yaml                 Start training
 soup chat --model ./output                    Interactive chat
 soup push --model ./output --repo user/name   Upload to HuggingFace
@@ -580,6 +640,7 @@ soup --verbose <command>                      Full traceback on errors
 
 | Extra | Install | What it adds |
 |---|---|---|
+| `vision` | `pip install 'soup-cli[vision]'` | Vision/multimodal fine-tuning (Pillow) |
 | `fast` | `pip install 'soup-cli[fast]'` | Unsloth backend (2-5x faster, -80% VRAM) |
 | `serve` | `pip install 'soup-cli[serve]'` | Inference server (FastAPI + uvicorn) |
 | `data` | `pip install 'soup-cli[data]'` | Deduplication (MinHash via datasketch) |

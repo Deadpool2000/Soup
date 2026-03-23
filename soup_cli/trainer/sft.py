@@ -42,8 +42,11 @@ class SFTTrainerWrapper:
         cfg = self.config
         tcfg = cfg.training
         use_unsloth = cfg.backend == "unsloth"
+        use_vision = cfg.modality == "vision"
 
-        if use_unsloth:
+        if use_vision:
+            self._setup_vision_transformers(cfg, tcfg)
+        elif use_unsloth:
             self._setup_unsloth(cfg, tcfg)
         else:
             self._setup_transformers(cfg, tcfg)
@@ -72,29 +75,32 @@ class SFTTrainerWrapper:
             console.print(f"[green]Auto batch size:[/] {batch_size}")
 
         # --- Dataset ---
-        def format_row(example):
-            if hasattr(self.tokenizer, "chat_template") and self.tokenizer.chat_template:
-                text = self.tokenizer.apply_chat_template(
-                    example["messages"], tokenize=False, add_generation_prompt=False
-                )
-            else:
-                # Fallback for models without chat template
-                parts = []
-                for msg in example["messages"]:
-                    role = msg["role"]
-                    content = msg["content"]
-                    parts.append(f"{role}: {content}")
-                text = "\n".join(parts)
-            return {"text": text}
+        if use_vision:
+            train_ds, eval_ds = self._prepare_vision_dataset(dataset)
+        else:
+            def format_row(example):
+                if hasattr(self.tokenizer, "chat_template") and self.tokenizer.chat_template:
+                    text = self.tokenizer.apply_chat_template(
+                        example["messages"], tokenize=False, add_generation_prompt=False
+                    )
+                else:
+                    # Fallback for models without chat template
+                    parts = []
+                    for msg in example["messages"]:
+                        role = msg["role"]
+                        content = msg["content"]
+                        parts.append(f"{role}: {content}")
+                    text = "\n".join(parts)
+                return {"text": text}
 
-        train_ds = Dataset.from_list(dataset["train"]).map(
-            format_row, remove_columns=["messages"]
-        )
-        eval_ds = None
-        if "val" in dataset and dataset["val"]:
-            eval_ds = Dataset.from_list(dataset["val"]).map(
+            train_ds = Dataset.from_list(dataset["train"]).map(
                 format_row, remove_columns=["messages"]
             )
+            eval_ds = None
+            if "val" in dataset and dataset["val"]:
+                eval_ds = Dataset.from_list(dataset["val"]).map(
+                    format_row, remove_columns=["messages"]
+                )
 
         # --- Output dir ---
         output_dir = Path(cfg.output)
@@ -208,6 +214,90 @@ class SFTTrainerWrapper:
         )
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+
+    def _setup_vision_transformers(self, cfg, tcfg):
+        """Load vision-language model via transformers (LLaMA-Vision, Qwen2-VL, etc.)."""
+        from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+        from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
+
+        console.print(f"[dim]Loading vision processor: {cfg.base}[/]")
+        self.processor = AutoProcessor.from_pretrained(cfg.base, trust_remote_code=True)
+        self.tokenizer = self.processor  # SFTTrainer uses processing_class
+
+        # Quantization
+        bnb_config = None
+        if tcfg.quantization == "4bit":
+            import torch
+
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+            )
+        elif tcfg.quantization == "8bit":
+            bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+
+        console.print(f"[dim]Loading vision model: {cfg.base}[/]")
+        model_kwargs = {"trust_remote_code": True, "device_map": "auto"}
+        if bnb_config:
+            model_kwargs["quantization_config"] = bnb_config
+
+        self.model = AutoModelForVision2Seq.from_pretrained(cfg.base, **model_kwargs)
+
+        if tcfg.quantization in ("4bit", "8bit"):
+            self.model = prepare_model_for_kbit_training(self.model)
+
+        # LoRA — target language model layers only
+        target_modules = tcfg.lora.target_modules
+        if target_modules == "auto":
+            target_modules = None
+
+        lora_config = LoraConfig(
+            r=tcfg.lora.r,
+            lora_alpha=tcfg.lora.alpha,
+            lora_dropout=tcfg.lora.dropout,
+            target_modules=target_modules,
+            bias="none",
+        )
+        self.model = get_peft_model(self.model, lora_config)
+
+    def _prepare_vision_dataset(self, dataset: dict):
+        """Prepare dataset for vision fine-tuning with image loading."""
+        from datasets import Dataset
+
+        def load_and_format_vision(example):
+            from PIL import Image as PILImage
+
+            image_path = example.get("image", "")
+            image = None
+            if image_path:
+                try:
+                    image = PILImage.open(image_path).convert("RGB")
+                except (FileNotFoundError, OSError):
+                    console.print(f"[yellow]Warning: cannot open image: {image_path}[/]")
+
+            messages = example["messages"]
+            text = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=False
+            )
+            result = {"text": text}
+            if image is not None:
+                result["images"] = [image]
+            return result
+
+        remove_cols = ["messages", "image"]
+        train_ds = Dataset.from_list(dataset["train"]).map(
+            load_and_format_vision,
+            remove_columns=[c for c in remove_cols if c in dataset["train"][0]],
+        )
+        eval_ds = None
+        if "val" in dataset and dataset["val"]:
+            eval_ds = Dataset.from_list(dataset["val"]).map(
+                load_and_format_vision,
+                remove_columns=[c for c in remove_cols if c in dataset["val"][0]],
+            )
+        return train_ds, eval_ds
 
     def train(
         self,

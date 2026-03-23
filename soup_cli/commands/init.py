@@ -17,7 +17,7 @@ def init(
         None,
         "--template",
         "-t",
-        help="Use a template: chat, code, medical, reasoning",
+        help="Use a template: chat, code, medical, reasoning, vision",
     ),
     output: str = typer.Option(
         "soup.yaml",
