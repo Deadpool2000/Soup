@@ -1,5 +1,7 @@
 """vLLM backend utilities for soup serve."""
 
+from typing import Optional
+
 
 def is_vllm_available() -> bool:
     """Check if vLLM is installed."""
@@ -23,11 +25,11 @@ def get_vllm_version() -> str:
 
 def create_vllm_engine(
     model_path: str,
-    base_model: str | None = None,
+    base_model: Optional[str] = None,
     is_adapter: bool = False,
     tensor_parallel_size: int = 1,
     gpu_memory_utilization: float = 0.9,
-    max_model_len: int | None = None,
+    max_model_len: Optional[int] = None,
     dtype: str = "auto",
 ):
     """Create a vLLM AsyncLLMEngine for serving.
@@ -80,7 +82,7 @@ def create_vllm_app(
     engine,
     engine_model_name: str,
     model_name: str,
-    adapter_path: str | None = None,
+    adapter_path: Optional[str] = None,
     max_tokens_default: int = 512,
 ):
     """Create a FastAPI app using vLLM engine for inference.
@@ -98,7 +100,6 @@ def create_vllm_app(
     import json
     import time
     import uuid
-    from typing import Optional
 
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
