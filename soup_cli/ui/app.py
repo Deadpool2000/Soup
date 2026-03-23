@@ -9,10 +9,6 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel as PydanticBaseModel
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -43,8 +39,13 @@ _train_config_path: Optional[str] = None
 _train_lock = threading.Lock()
 
 
-def create_app() -> FastAPI:
+def create_app():
     """Create the Soup Web UI FastAPI application."""
+    from fastapi import FastAPI, HTTPException, Query
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import HTMLResponse
+    from fastapi.staticfiles import StaticFiles
+
     app = FastAPI(title="Soup Web UI", version="1.0.0")
 
     app.add_middleware(

@@ -40,9 +40,12 @@ class TestUICommand:
 
         runner = CliRunner()
         result = runner.invoke(app, ["ui", "--help"])
-        assert "--port" in result.output
-        assert "--host" in result.output
-        assert "--no-browser" in result.output
+        # Rich markup wraps dashes with ANSI codes, so check without codes
+        import re
+        clean = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+        assert "--port" in clean
+        assert "--host" in clean
+        assert "--no-browser" in clean
 
 
 class TestCreateApp:
