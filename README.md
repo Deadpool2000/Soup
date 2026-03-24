@@ -89,7 +89,7 @@ soup chat --model ./output
 ### 5. Push to HuggingFace
 
 ```bash
-soup push --model ./output --repo your-username/my-model
+soup push --model ./output --repo MakazhanAlpamys/my-model
 ```
 
 ### 6. Merge & Export
@@ -382,10 +382,10 @@ soup chat --model ./output --temperature 0.3 --max-tokens 256
 
 ```bash
 # Upload model to HF Hub
-soup push --model ./output --repo your-username/my-model
+soup push --model ./output --repo MakazhanAlpamys/my-model
 
 # Make it private
-soup push --model ./output --repo your-username/my-model --private
+soup push --model ./output --repo MakazhanAlpamys/my-model --private
 ```
 
 ## Merge LoRA Adapter
@@ -603,7 +603,7 @@ soup version
 
 # Full system info (useful for bug reports)
 soup version --full
-# → soup v0.4.0 | Python 3.11.5 | CUDA 12.1 | extras: serve, data
+# → soup v0.10.0 | Python 3.11.5 | CUDA 12.1 | extras: serve, data
 ```
 
 ## Web UI

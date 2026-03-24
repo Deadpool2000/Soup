@@ -7,7 +7,7 @@ Thank you for your interest in contributing to Soup! We welcome bug reports, fea
 ### 1. Fork & Clone
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/Soup.git
+git clone https://github.com/MakazhanAlpamys/Soup.git
 cd Soup
 ```
 
