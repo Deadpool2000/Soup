@@ -17,7 +17,7 @@ Example:
 
 **Do not** open a public issue or pull request for security vulnerabilities.
 
-Instead, email your findings to **security@soup-cli.dev** with:
+Instead, use [GitHub Security Advisories](https://github.com/MakazhanAlpamys/Soup/security/advisories/new) to report privately, or email **vpn.alpamys@gmail.com** with:
 
 1. **Description**: A clear explanation of the vulnerability
 2. **Steps to Reproduce**: How to trigger or demonstrate the issue
@@ -28,7 +28,7 @@ Instead, email your findings to **security@soup-cli.dev** with:
 ### What to Include
 
 ```
-To: security@soup-cli.dev
+To: vpn.alpamys@gmail.com
 Subject: Security Vulnerability Report: [Brief Title]
 
 Description:
@@ -136,7 +136,7 @@ We actively monitor and update dependencies:
 If you have security questions (not vulnerability reports) or need clarification:
 
 - Open a GitHub Discussion tagged `security`
-- Email us at support@soup-cli.dev (non-vulnerability inquiries)
+- Open a [GitHub Issue](https://github.com/MakazhanAlpamys/Soup/issues) (non-vulnerability inquiries)
 - Check our [CONTRIBUTING.md](CONTRIBUTING.md) for general support
 
 ## License

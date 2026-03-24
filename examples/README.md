@@ -125,9 +125,8 @@ examples/
   
   data/                 # Sample datasets (JSONL)
     alpaca_tiny.jsonl
-    chat_multichat.jsonl
+    chat_preferences.jsonl
     reasoning_math.jsonl
-    vision_images.tar.gz (with image files)
 ```
 
 ## Using Your Own Data
