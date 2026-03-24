@@ -114,24 +114,24 @@ soup train --config soup.yaml
 - Always run `ruff check soup_cli/ tests/` before committing
 - Always run `pytest tests/ -v` before committing
 
-## Release Checklist (обязательно при каждой фазе)
+## Release Checklist (required for every phase)
 
-При завершении каждой фазы/фичи — выполни **все** пункты по порядку:
+Complete **all** steps in order when finishing a phase or feature:
 
-1. **Код:** реализуй фичу, следуя конвенциям проекта
-2. **Тесты:** напиши тесты, добавь файл в таблицу тестов ниже
-3. **Lint:** `ruff check soup_cli/ tests/` — должен быть clean
-4. **Pytest:** `pytest tests/ -v --tb=short` — все тесты должны проходить
-5. **Версия:** обнови версию в `pyproject.toml` + `soup_cli/__init__.py`
-6. **CLAUDE.md:** обнови Architecture, таблицу тестов, любые новые секции
-7. **README.md:** добавь документацию новой фичи, обнови таблицу Features и All Commands
-8. **plan.md:** отметь фазу как ✅, обнови счётчик версии/тестов
-9. **Commit:** один коммит на фазу с описательным сообщением
+1. **Code:** implement the feature following project conventions
+2. **Tests:** write tests, add the test file to the test table below
+3. **Lint:** `ruff check soup_cli/ tests/` — must be clean
+4. **Pytest:** `pytest tests/ -v --tb=short` — all tests must pass
+5. **Version:** bump version in `pyproject.toml` + `soup_cli/__init__.py`
+6. **CLAUDE.md:** update Architecture, test table, and any new sections
+7. **README.md:** add documentation for the new feature, update Features and All Commands tables
+8. **plan.md:** mark the phase as complete, update version/test counters
+9. **Commit:** one commit per phase with a descriptive message
 10. **Push:** `git push origin main`
 11. **Tag:** `git tag v0.X.Y && git push origin v0.X.Y`
-12. **Release:** `gh release create v0.X.Y` с changelog (What's New, Install/Upgrade)
+12. **Release:** `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
 
-**Не пропускай пункты.** Каждая фаза = полный цикл от кода до PyPI.
+**Do not skip steps.** Every phase = full cycle from code to PyPI.
 
 ## Publishing
 
