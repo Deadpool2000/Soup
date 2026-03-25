@@ -192,6 +192,29 @@ soup version           # Show version (--full for details)
 - PyPI: auto-publish on `git tag v*` via Trusted Publisher (OIDC)
 - Always run `ruff check soup_cli/ tests/` and `pytest tests/ -v` before committing
 
+## Release Checklist
+
+**Required for every phase. Do not skip steps. Every phase = full cycle from code to PyPI.**
+
+1. **Code**: implement the feature following project conventions
+2. **Tests**: write tests, add the test file to the test table below
+3. **Lint**: `ruff check soup_cli/ tests/` — must be clean
+4. **Pytest**: `pytest tests/ -v --tb=short` — all tests must pass
+5. **Reviews** (run in order, fix all CRITICAL and HIGH before next):
+   - `/everything-claude-code:python-review`
+   - `/everything-claude-code:code-review`
+   - `/security-review`
+   - `/everything-claude-code:tdd`
+   - `/everything-claude-code:verification-loop`
+6. **Version**: bump version in `pyproject.toml` + `soup_cli/__init__.py`
+7. **CLAUDE.md**: update architecture, test table, and any new sections
+8. **README.md**: add docs for new feature, update Features / All Commands / Data Formats
+9. **plan.md**: mark the phase as complete, update version/test counters
+10. **Commit**: one commit per phase with a descriptive message
+11. **Push**: `git push origin main`
+12. **Tag**: `git tag v0.X.Y && git push origin v0.X.Y`
+13. **Release**: `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
+
 ## Tests (42 test files, 877 tests)
 
 | File | Covers |
