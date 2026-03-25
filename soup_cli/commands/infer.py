@@ -41,7 +41,9 @@ def infer(
     max_tokens: int = typer.Option(
         256,
         "--max-tokens",
-        help="Maximum tokens to generate per response",
+        min=1,
+        max=16384,
+        help="Maximum tokens to generate per response (1-16384)",
     ),
     temperature: float = typer.Option(
         0.7,
@@ -94,6 +96,10 @@ def infer(
     )
 
     # Load model
+    console.print(
+        "[yellow]Warning: loading model with trust_remote_code=True. "
+        "Only use models you trust.[/]"
+    )
     console.print("[dim]Loading model...[/]")
     model_obj, tokenizer = _load_model(str(model_path), base, device)
     console.print("[green]Model loaded.[/]\n")
