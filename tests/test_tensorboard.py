@@ -66,7 +66,7 @@ class TestTensorBoardImportCheck:
     """Test that --tensorboard checks for tensorboard installation."""
 
     def test_tensorboard_flag_checks_import(self, tmp_path):
-        """Should check that tensorboard is importable."""
+        """Should fail with install hint when tensorboard is not available."""
         from typer.testing import CliRunner
 
         from soup_cli.cli import app
@@ -79,21 +79,27 @@ class TestTensorBoardImportCheck:
             "  train: ./data.jsonl\n"
         )
 
-        # Mock tensorboard import to fail
-        with mock_patch.dict("sys.modules", {"tensorboard": None}):
-            with mock_patch(
-                "builtins.__import__",
-                side_effect=lambda name, *args, **kwargs: (
-                    (_ for _ in ()).throw(ImportError("no tensorboard"))
-                    if name == "tensorboard" else __import__(name, *args, **kwargs)
-                ),
-            ):
+        # Patch the specific import inside train.py to raise ImportError
+        with mock_patch(
+            "soup_cli.commands.train.typer",
+            wraps=__import__("typer"),
+        ):
+            original_import = __builtins__["__import__"] if isinstance(
+                __builtins__, dict
+            ) else __builtins__.__import__
+
+            def mock_import(name, *args, **kwargs):
+                if name == "tensorboard":
+                    raise ImportError("no tensorboard")
+                return original_import(name, *args, **kwargs)
+
+            with mock_patch("builtins.__import__", side_effect=mock_import):
                 runner = CliRunner()
                 result = runner.invoke(app, [
                     "train", "--config", str(config_file), "--tensorboard",
                 ])
-                # Should fail with import error
-                assert result.exit_code != 0 or "tensorboard" in result.output.lower()
+
+        assert result.exit_code != 0
 
 
 # ─── CLI Help Tests ──────────────────────────────────────────────────────
@@ -230,3 +236,35 @@ class TestTensorBoardSweepRouting:
             result = _run_single(cfg, {}, "tb_run_1", None)
 
         assert result["run_id"] == "run-tb-1"
+
+
+# ─── Happy Path Test ─────────────────────────────────────────────────────
+
+
+class TestTensorBoardHappyPath:
+    """Test that --tensorboard succeeds when tensorboard is installed."""
+
+    def test_tensorboard_accepted_when_installed(self, tmp_path):
+        """--tensorboard should print 'enabled' when tensorboard is available."""
+        from typer.testing import CliRunner
+
+        from soup_cli.cli import app
+
+        config_file = tmp_path / "soup.yaml"
+        config_file.write_text(
+            "base: some-model\n"
+            "task: sft\n"
+            "data:\n"
+            "  train: ./data.jsonl\n"
+        )
+
+        # Mock tensorboard import to succeed
+        mock_tb = MagicMock()
+        with mock_patch.dict("sys.modules", {"tensorboard": mock_tb}):
+            runner = CliRunner()
+            result = runner.invoke(app, [
+                "train", "--config", str(config_file), "--tensorboard", "--yes",
+            ])
+            # Should get past the tensorboard check — will fail later on
+            # data loading, but should print "TensorBoard logging enabled"
+            assert "tensorboard logging enabled" in result.output.lower()

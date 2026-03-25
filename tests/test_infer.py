@@ -1,6 +1,9 @@
 """Tests for soup infer — batch inference command."""
 
 import json
+from unittest.mock import MagicMock, PropertyMock
+
+import pytest
 
 # ─── Prompt Reading Tests ───────────────────────────────────────────────────
 
@@ -180,58 +183,234 @@ class TestInferCLI:
         result = runner.invoke(app, ["infer"])
         assert result.exit_code != 0
 
+    def test_max_tokens_too_large_rejected(self, tmp_path):
+        """--max-tokens above 16384 should be rejected by CLI."""
+        from typer.testing import CliRunner
 
-# ─── Output Format Tests ──────────────────────────────────────────────────
+        from soup_cli.cli import app
+
+        prompts_file = tmp_path / "prompts.jsonl"
+        prompts_file.write_text(json.dumps({"prompt": "test"}) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "infer",
+            "--model", str(tmp_path),
+            "--input", str(prompts_file),
+            "--output", str(tmp_path / "out.jsonl"),
+            "--max-tokens", "99999",
+        ])
+        assert result.exit_code != 0
+
+    def test_max_tokens_zero_rejected(self, tmp_path):
+        """--max-tokens 0 should be rejected by CLI."""
+        from typer.testing import CliRunner
+
+        from soup_cli.cli import app
+
+        prompts_file = tmp_path / "prompts.jsonl"
+        prompts_file.write_text(json.dumps({"prompt": "test"}) + "\n")
+
+        runner = CliRunner()
+        result = runner.invoke(app, [
+            "infer",
+            "--model", str(tmp_path),
+            "--input", str(prompts_file),
+            "--output", str(tmp_path / "out.jsonl"),
+            "--max-tokens", "0",
+        ])
+        assert result.exit_code != 0
 
 
-class TestInferOutputFormat:
-    """Test that output file is valid JSONL with expected fields."""
-
-    def test_output_jsonl_structure(self, tmp_path):
-        """Output should be valid JSONL with prompt, response, tokens_generated."""
-        # Create a fake output file to validate the structure
-        output_path = tmp_path / "results.jsonl"
-        results = [
-            {"prompt": "What is AI?", "response": "AI is...", "tokens_generated": 5},
-            {"prompt": "Hello", "response": "Hi there!", "tokens_generated": 3},
-        ]
-        with open(output_path, "w", encoding="utf-8") as f:
-            for row in results:
-                f.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-        # Read back and validate
-        with open(output_path, encoding="utf-8") as f:
-            lines = [json.loads(line) for line in f if line.strip()]
-
-        assert len(lines) == 2
-        for line in lines:
-            assert "prompt" in line
-            assert "response" in line
-            assert "tokens_generated" in line
-            assert isinstance(line["tokens_generated"], int)
+# ─── Load Model Tests ────────────────────────────────────────────────────
 
 
-# ─── Load Model Detection Tests ──────────────────────────────────────────
+class TestLoadModel:
+    """Test _load_model adapter detection and error paths."""
 
+    def test_adapter_without_base_model_exits(self, tmp_path):
+        """Should exit if adapter found but no base model detectable."""
 
-class TestInferModelDetection:
-    """Test model loading and adapter detection."""
+        from soup_cli.commands.infer import _load_model
 
-    def test_adapter_detection_with_config(self, tmp_path):
-        """Should detect adapter when adapter_config.json exists."""
+        # Create adapter_config.json without base_model_name_or_path
+        adapter_config = tmp_path / "adapter_config.json"
+        adapter_config.write_text(json.dumps({"peft_type": "LORA"}))
+
+        from click.exceptions import Exit
+
+        with pytest.raises(Exit):
+            _load_model(str(tmp_path), None, "cpu")
+
+    def test_adapter_with_corrupt_json_exits(self, tmp_path):
+        """Should exit if adapter_config.json is corrupt and no --base given."""
+        from soup_cli.commands.infer import _load_model
+
+        adapter_config = tmp_path / "adapter_config.json"
+        adapter_config.write_text("not valid json {{{")
+
+        from click.exceptions import Exit
+
+        with pytest.raises(Exit):
+            _load_model(str(tmp_path), None, "cpu")
+
+    def test_adapter_config_reads_base_model(self, tmp_path):
+        """Should read base_model_name_or_path from adapter_config.json."""
         adapter_config = tmp_path / "adapter_config.json"
         adapter_config.write_text(json.dumps({
             "base_model_name_or_path": "meta-llama/Llama-3.1-8B-Instruct"
         }))
 
-        # The adapter_config.json should be detectable
-        assert adapter_config.exists()
         config = json.loads(adapter_config.read_text())
-        assert "base_model_name_or_path" in config
+        assert config["base_model_name_or_path"] == "meta-llama/Llama-3.1-8B-Instruct"
 
     def test_no_adapter_config_is_full_model(self, tmp_path):
         """Without adapter_config.json, model is treated as full model."""
         assert not (tmp_path / "adapter_config.json").exists()
+
+
+# ─── Generate Function Tests ─────────────────────────────────────────────
+
+
+class TestGenerate:
+    """Test _generate function branches."""
+
+    def _make_mock_model_and_tokenizer(self, has_chat_template=True):
+        """Create mock model and tokenizer for testing _generate."""
+        import torch
+
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.pad_token_id = 0
+
+        if has_chat_template:
+            mock_tokenizer.chat_template = "dummy_template"
+            mock_tokenizer.apply_chat_template = MagicMock(
+                return_value="<|user|>Hello<|assistant|>"
+            )
+        else:
+            mock_tokenizer.chat_template = None
+
+        # Mock tokenizer call (tokenizer(text, return_tensors="pt"))
+        mock_inputs = {
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
+        }
+        mock_tokenizer.return_value = mock_inputs
+        mock_tokenizer.decode = MagicMock(return_value="Hello there!")
+
+        mock_model = MagicMock()
+        type(mock_model).device = PropertyMock(return_value=torch.device("cpu"))
+        mock_model.generate = MagicMock(
+            return_value=torch.tensor([[1, 2, 3, 4, 5, 6]])  # 3 input + 3 new tokens
+        )
+
+        return mock_model, mock_tokenizer
+
+    def test_generate_with_chat_template(self):
+        """Should use apply_chat_template when available."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer(has_chat_template=True)
+        messages = [{"role": "user", "content": "Hello"}]
+
+        response, token_count = _generate(model, tokenizer, messages)
+
+        tokenizer.apply_chat_template.assert_called_once()
+        assert isinstance(response, str)
+        assert token_count == 3  # 6 total - 3 input
+
+    def test_generate_without_chat_template(self):
+        """Should use fallback formatter when no chat_template."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer(has_chat_template=False)
+        messages = [
+            {"role": "system", "content": "You are helpful"},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+
+        response, token_count = _generate(model, tokenizer, messages)
+
+        # Should NOT call apply_chat_template
+        assert not hasattr(tokenizer.apply_chat_template, 'called') or \
+            not tokenizer.apply_chat_template.called
+        assert isinstance(response, str)
+        assert token_count == 3
+
+    def test_generate_greedy_temperature_zero(self):
+        """Should set do_sample=False when temperature=0."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer()
+        messages = [{"role": "user", "content": "Hello"}]
+
+        _generate(model, tokenizer, messages, temperature=0.0)
+
+        # Check gen_kwargs passed to model.generate
+        call_kwargs = model.generate.call_args[1]
+        assert call_kwargs["do_sample"] is False
+        assert "temperature" not in call_kwargs
+        assert "top_p" not in call_kwargs
+
+    def test_generate_sampling_temperature_positive(self):
+        """Should set do_sample=True and include temperature when > 0."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer()
+        messages = [{"role": "user", "content": "Hello"}]
+
+        _generate(model, tokenizer, messages, temperature=0.7)
+
+        call_kwargs = model.generate.call_args[1]
+        assert call_kwargs["do_sample"] is True
+        assert call_kwargs["temperature"] == pytest.approx(0.7)
+        assert "top_p" in call_kwargs
+
+    def test_generate_returns_tuple(self):
+        """_generate should return (text, token_count) tuple."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer()
+        messages = [{"role": "user", "content": "Hello"}]
+
+        result = _generate(model, tokenizer, messages)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert isinstance(result[0], str)
+        assert isinstance(result[1], int)
+
+    def test_generate_token_count_from_tensor_shape(self):
+        """Token count should come from tensor shape, not re-encoding."""
+        import torch
+
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer()
+        # Return 7 tokens total, 3 are input => 4 new tokens
+        model.generate.return_value = torch.tensor([[1, 2, 3, 10, 20, 30, 40]])
+        messages = [{"role": "user", "content": "Hello"}]
+
+        _, token_count = _generate(model, tokenizer, messages)
+        assert token_count == 4  # 7 - 3 input tokens
+
+    def test_generate_fallback_formats_roles(self):
+        """Fallback formatter should include all role types."""
+        from soup_cli.commands.infer import _generate
+
+        model, tokenizer = self._make_mock_model_and_tokenizer(has_chat_template=False)
+        messages = [
+            {"role": "system", "content": "Be helpful"},
+            {"role": "user", "content": "What is 2+2?"},
+        ]
+
+        _generate(model, tokenizer, messages)
+
+        # Check that the tokenizer was called with formatted text
+        tokenizer_call_args = tokenizer.call_args[0][0]
+        assert "System: Be helpful" in tokenizer_call_args
+        assert "User: What is 2+2?" in tokenizer_call_args
+        assert "Assistant:" in tokenizer_call_args
 
 
 # ─── Import Tests ─────────────────────────────────────────────────────────
