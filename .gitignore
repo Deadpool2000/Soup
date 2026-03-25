@@ -40,6 +40,7 @@ report.xml
 
 # Internal plan (not for repo)
 .claude/plan.md
+.claude/settings.json
 
 # ECC plugin (local only)
 .claude/agents/
@@ -49,4 +50,5 @@ report.xml
 .claude/mcp-configs/
 .claude/rules/
 .claude/skills/
-.claude/settings.json.coverage
+.claude/settings.json
+.coverage
