@@ -118,25 +118,51 @@ class SFTTrainerWrapper:
         warmup_steps = int(total_steps * tcfg.warmup_ratio)
 
         # --- Training args ---
-        training_args = TrainingArguments(
-            output_dir=str(output_dir),
-            num_train_epochs=tcfg.epochs,
-            per_device_train_batch_size=batch_size,
-            gradient_accumulation_steps=tcfg.gradient_accumulation_steps,
-            learning_rate=tcfg.lr,
-            warmup_steps=warmup_steps,
-            weight_decay=tcfg.weight_decay,
-            max_grad_norm=tcfg.max_grad_norm,
-            optim=tcfg.optimizer,
-            lr_scheduler_type=tcfg.scheduler,
-            logging_steps=tcfg.logging_steps,
-            save_steps=tcfg.save_steps,
-            save_total_limit=3,
-            bf16=self.device == "cuda",
-            report_to=self.report_to,
-            remove_unused_columns=False,
-            deepspeed=self.deepspeed_config,
-        )
+        training_kwargs = {
+            "output_dir": str(output_dir),
+            "num_train_epochs": tcfg.epochs,
+            "per_device_train_batch_size": batch_size,
+            "gradient_accumulation_steps": tcfg.gradient_accumulation_steps,
+            "learning_rate": tcfg.lr,
+            "warmup_steps": warmup_steps,
+            "weight_decay": tcfg.weight_decay,
+            "max_grad_norm": tcfg.max_grad_norm,
+            "optim": tcfg.optimizer,
+            "lr_scheduler_type": tcfg.scheduler,
+            "logging_steps": tcfg.logging_steps,
+            "save_steps": tcfg.save_steps,
+            "save_total_limit": 3,
+            "bf16": self.device == "cuda",
+            "report_to": self.report_to,
+            "remove_unused_columns": False,
+            "deepspeed": self.deepspeed_config,
+        }
+
+        # LoRA+ — different learning rates for A and B matrices
+        if tcfg.loraplus_lr_ratio is not None:
+            training_kwargs["loraplus_lr_ratio"] = tcfg.loraplus_lr_ratio
+
+        # GaLore — memory-efficient full-parameter training
+        if tcfg.use_galore:
+            from soup_cli.utils.galore import get_galore_optimizer_and_params
+
+            if tcfg.optimizer != "adamw_torch":
+                console.print(
+                    f"[yellow]GaLore overrides optimizer '{tcfg.optimizer}' "
+                    f"with 'galore_adamw'.[/]"
+                )
+            galore_kwargs = get_galore_optimizer_and_params(
+                galore_rank=tcfg.galore_rank,
+                galore_update_proj_gap=tcfg.galore_update_proj_gap,
+                galore_scale=tcfg.galore_scale,
+            )
+            training_kwargs.update(galore_kwargs)
+            console.print(
+                f"[green]GaLore enabled:[/] rank={tcfg.galore_rank}, "
+                f"update_gap={tcfg.galore_update_proj_gap}, scale={tcfg.galore_scale}"
+            )
+
+        training_args = TrainingArguments(**training_kwargs)
 
         # --- Trainer ---
         self.trainer = SFTTrainer(
@@ -197,6 +223,7 @@ class SFTTrainerWrapper:
             target_modules=target_modules,
             task_type=TaskType.CAUSAL_LM,
             bias="none",
+            use_dora=tcfg.lora.use_dora,
         )
         self.model = get_peft_model(self.model, lora_config)
 
@@ -268,6 +295,7 @@ class SFTTrainerWrapper:
             lora_dropout=tcfg.lora.dropout,
             target_modules=target_modules,
             bias="none",
+            use_dora=tcfg.lora.use_dora,
         )
         self.model = get_peft_model(self.model, lora_config)
 

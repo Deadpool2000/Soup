@@ -359,6 +359,7 @@ class PPOTrainerWrapper:
             target_modules=target_modules,
             task_type=TaskType.CAUSAL_LM,
             bias="none",
+            use_dora=tcfg.lora.use_dora,
         )
         self.model = get_peft_model(self.model, lora_config)
 

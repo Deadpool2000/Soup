@@ -136,6 +136,18 @@ def train(
         )
     )
 
+    # Validate GaLore configuration
+    if cfg.training.use_galore:
+        from soup_cli.utils.galore import validate_galore_config
+
+        galore_errors = validate_galore_config(
+            cfg.training.use_galore, cfg.training.quantization, cfg.backend,
+        )
+        for err in galore_errors:
+            console.print(f"[red]GaLore error:[/] {err}")
+        if galore_errors:
+            raise typer.Exit(1)
+
     # Validate QAT configuration
     if cfg.training.quantization_aware:
         from soup_cli.utils.qat import validate_qat_config
@@ -210,6 +222,30 @@ def train(
         from soup_cli.trainer.ppo import PPOTrainerWrapper
 
         trainer_wrapper = PPOTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
+    elif cfg.task == "kto":
+        from soup_cli.trainer.kto import KTOTrainerWrapper
+
+        trainer_wrapper = KTOTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
+    elif cfg.task == "orpo":
+        from soup_cli.trainer.orpo import ORPOTrainerWrapper
+
+        trainer_wrapper = ORPOTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
+    elif cfg.task == "simpo":
+        from soup_cli.trainer.simpo import SimPOTrainerWrapper
+
+        trainer_wrapper = SimPOTrainerWrapper(
+            cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
+        )
+    elif cfg.task == "ipo":
+        from soup_cli.trainer.ipo import IPOTrainerWrapper
+
+        trainer_wrapper = IPOTrainerWrapper(
             cfg, device=device, report_to=report_to, deepspeed_config=ds_config_path,
         )
     elif cfg.task == "reward_model":

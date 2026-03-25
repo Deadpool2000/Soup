@@ -1,12 +1,12 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.10.10). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.12.0). Python 3.9+, MIT license.
 
 ## Build & Development
 
 ```bash
 pip install -e ".[dev]"          # Install editable + test deps
-pytest tests/ -v --tb=short      # Run all tests (666 tests)
+pytest tests/ -v --tb=short      # Run all tests (877 tests)
 ruff check soup_cli/ tests/      # Lint (must pass before commit)
 ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
@@ -16,7 +16,7 @@ ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
 soup_cli/
   cli.py              # Entry point, Typer app, all command registration
-  __init__.py          # __version__ = "0.10.9"
+  __init__.py          # __version__ = "0.12.0"
   config/
     schema.py          # Pydantic models (SoupConfig, DataConfig, TrainingConfig, LoraConfig)
     loader.py          # YAML -> SoupConfig, load_config_from_string()
@@ -28,6 +28,10 @@ soup_cli/
     sft.py             # SFTTrainerWrapper (415 lines, supports vision + unsloth + QAT)
     dpo.py             # DPOTrainerWrapper (253 lines)
     grpo.py            # GRPOTrainerWrapper (349 lines, reasoning/DeepSeek-R1 style)
+    kto.py             # KTOTrainerWrapper (255 lines, unpaired preference)
+    orpo.py            # ORPOTrainerWrapper (230 lines, odds ratio preference)
+    simpo.py           # SimPOTrainerWrapper (233 lines, simple preference via CPOTrainer)
+    ipo.py             # IPOTrainerWrapper (233 lines, identity preference via DPOTrainer)
     ppo.py             # PPOTrainerWrapper (682 lines, full RLHF stage 3)
     reward_model.py    # RewardModelTrainerWrapper (272 lines, RLHF stage 2)
     rewards.py         # Built-in reward fns (accuracy, format) + custom .py loader
@@ -37,8 +41,8 @@ soup_cli/
   experiment/
     tracker.py         # SQLite at ~/.soup/experiments.db (runs, metrics, eval_results)
   commands/
-    train.py           # soup train (routes to SFT/DPO/GRPO/PPO/Reward)
-    init.py            # soup init (interactive wizard + 6 templates)
+    train.py           # soup train (routes to SFT/DPO/GRPO/PPO/Reward/KTO/ORPO/SimPO/IPO)
+    init.py            # soup init (interactive wizard + 10 templates)
     chat.py            # soup chat (terminal REPL)
     serve.py           # soup serve (OpenAI-compatible API, transformers/vllm backends)
     export.py          # soup export (GGUF conversion via llama.cpp)
@@ -63,8 +67,9 @@ soup_cli/
     qat.py             # Quantization-Aware Training (torchao)
     unsloth.py         # FastLanguageModel backend (2-5x speedup)
     vllm.py            # AsyncLLMEngine backend (2-4x inference throughput)
+    galore.py          # GaLore optimizer config + validation
     constants.py       # APP_NAME, paths, default chat template
-tests/                 # 37 test files, 666 tests
+tests/                 # 42 test files, 877 tests
 examples/
   configs/             # 7 production-ready YAML examples
   data/                # Sample datasets
@@ -104,12 +109,12 @@ soup version           # Show version (--full for details)
 
 `config/schema.py` is the single source of truth. Pydantic v2 models:
 
-- **SoupConfig**: base (required), task (sft/dpo/grpo/ppo/reward_model), modality (text/vision), backend (transformers/unsloth), data, training, output
-- **DataConfig**: train, format (alpaca/sharegpt/chatml/dpo/llava/sharegpt4v/auto), val_split, max_length, image_dir
-- **TrainingConfig**: epochs, lr, batch_size (int or "auto"), quantization (4bit/8bit/none), quantization_aware, optimizer, scheduler, dpo_beta, grpo_beta, num_generations, reward_fn, ppo_epochs, ppo_clip_ratio, ppo_kl_penalty, reward_model
-- **LoraConfig**: r, alpha, dropout, target_modules
+- **SoupConfig**: base (required), task (sft/dpo/kto/orpo/simpo/ipo/grpo/ppo/reward_model), modality (text/vision), backend (transformers/unsloth), data, training, output
+- **DataConfig**: train, format (alpaca/sharegpt/chatml/dpo/kto/llava/sharegpt4v/auto), val_split, max_length, image_dir
+- **TrainingConfig**: epochs, lr, batch_size (int or "auto"), quantization (4bit/8bit/none), quantization_aware, optimizer, scheduler, dpo_beta, kto_beta, orpo_beta, simpo_gamma, cpo_alpha, ipo_tau, grpo_beta, num_generations, reward_fn, ppo_epochs, ppo_clip_ratio, ppo_kl_penalty, reward_model, loraplus_lr_ratio, use_galore, galore_rank, galore_update_proj_gap, galore_scale
+- **LoraConfig**: r, alpha, dropout, target_modules, use_dora
 
-6 built-in templates: chat, code, medical, reasoning, vision, rlhf.
+10 built-in templates: chat, code, medical, reasoning, vision, kto, orpo, simpo, ipo, rlhf.
 
 ## Training Tasks
 
@@ -118,6 +123,10 @@ soup version           # Show version (--full for details)
 | sft | SFTTrainerWrapper | alpaca/sharegpt/chatml/llava | Instruction tuning |
 | dpo | DPOTrainerWrapper | prompt+chosen+rejected | Preference alignment |
 | grpo | GRPOTrainerWrapper | prompts + reward fns | Reasoning (DeepSeek-R1) |
+| kto | KTOTrainerWrapper | prompt+completion+label | Unpaired preference alignment |
+| orpo | ORPOTrainerWrapper | prompt+chosen+rejected | Reference-free alignment |
+| simpo | SimPOTrainerWrapper | prompt+chosen+rejected | Length-normalized preference |
+| ipo | IPOTrainerWrapper | prompt+chosen+rejected | Regularized preference (squared hinge) |
 | ppo | PPOTrainerWrapper | prompts + reward model/fn | Full RLHF stage 3 |
 | reward_model | RewardModelTrainerWrapper | prompt+chosen+rejected | RLHF stage 2 |
 
@@ -144,6 +153,8 @@ soup version           # Show version (--full for details)
 - **Deprecated CLI secrets**: `--api-key` and `--token` flags read from env vars, marked deprecated
 - **Custom reward warning**: Prominent warning before executing arbitrary .py reward files
 - **max_tokens bound**: Capped at 16384 on inference endpoints
+- **experiment_name validation**: Path separators and null bytes blocked (v0.12.0)
+- **GaLore params**: Type-enforced before string interpolation (v0.12.0)
 
 ## Code Conventions
 
@@ -181,7 +192,7 @@ soup version           # Show version (--full for details)
 - PyPI: auto-publish on `git tag v*` via Trusted Publisher (OIDC)
 - Always run `ruff check soup_cli/ tests/` and `pytest tests/ -v` before committing
 
-## Tests (37 files, 666 tests)
+## Tests (42 test files, 877 tests)
 
 | File | Covers |
 |------|--------|
@@ -221,4 +232,9 @@ soup version           # Show version (--full for details)
 | test_ui.py | Web UI command, FastAPI endpoints, auth, static files, config validation |
 | test_vllm_serve.py | vLLM backend detection, engine creation, serve --backend flag, FastAPI app |
 | test_ppo.py | PPO config, reward model config, data prep, RLHF template, routing, sweep |
+| test_kto.py | KTO config, data format, template, routing, sweep, train guard, wizard |
+| test_orpo.py | ORPO config, template, routing, sweep, train guard, wizard |
+| test_simpo.py | SimPO config, template, routing, sweep, train guard |
+| test_ipo.py | IPO config, template, routing, sweep, train guard |
+| test_advanced_peft.py | DoRA, LoRA+, GaLore config, validation, sweep shortcuts |
 | test_bugfixes.py | v0.10.1-v0.10.8 regression fixes |

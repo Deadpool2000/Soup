@@ -1,5 +1,6 @@
-"""DPO (Direct Preference Optimization) trainer — wraps trl.DPOTrainer."""
+"""ORPO (Odds Ratio Preference Optimization) trainer — wraps trl.ORPOTrainer."""
 
+import math
 import time
 from pathlib import Path
 from typing import Optional
@@ -12,10 +13,13 @@ from soup_cli.utils.gpu import estimate_batch_size, model_size_from_name
 console = Console()
 
 
-class DPOTrainerWrapper:
-    """High-level wrapper for DPO training from SoupConfig.
+class ORPOTrainerWrapper:
+    """High-level wrapper for ORPO training from SoupConfig.
 
-    DPO requires preference data with three fields:
+    ORPO uses preference data (same format as DPO) but does not
+    require a reference model — it combines SFT and alignment in one step.
+
+    Data fields:
     - prompt: the input prompt
     - chosen: the preferred response
     - rejected: the less preferred response
@@ -33,16 +37,15 @@ class DPOTrainerWrapper:
         self.report_to = report_to
         self.deepspeed_config = deepspeed_config
         self.model = None
-        self.ref_model = None
         self.tokenizer = None
         self.trainer = None
+        self._output_dir = None
 
-    def setup(self, dataset: dict):
-        """Load model, tokenizer, apply LoRA, create DPO trainer."""
+    def setup(self, dataset: dict) -> None:
+        """Load model, tokenizer, apply LoRA, create ORPO trainer."""
         from datasets import Dataset
-        from trl import DPOConfig, DPOTrainer
+        from trl import ORPOConfig, ORPOTrainer
 
-        # Enable Rich progress bar for HuggingFace downloads
         from soup_cli.trainer.sft import _enable_hf_transfer_progress
 
         _enable_hf_transfer_progress()
@@ -77,12 +80,11 @@ class DPOTrainerWrapper:
                 quantization=tcfg.quantization,
                 lora_r=tcfg.lora.r,
             )
-            # DPO processes pairs → roughly 2x memory per sample
+            # ORPO processes pairs → roughly 2x memory per sample
             batch_size = max(1, batch_size // 2)
-            console.print(f"[green]Auto batch size (DPO):[/] {batch_size}")
+            console.print(f"[green]Auto batch size (ORPO):[/] {batch_size}")
 
         # --- Dataset ---
-        # DPO expects: prompt, chosen, rejected
         train_ds = Dataset.from_list(dataset["train"])
         eval_ds = None
         if "val" in dataset and dataset["val"]:
@@ -95,16 +97,14 @@ class DPOTrainerWrapper:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # --- Calculate warmup steps from ratio ---
-        import math
-
         total_steps = (
             math.ceil(len(train_ds) / batch_size / tcfg.gradient_accumulation_steps)
             * tcfg.epochs
         )
         warmup_steps = int(total_steps * tcfg.warmup_ratio)
 
-        # --- DPO config ---
-        dpo_config = DPOConfig(
+        # --- ORPO config ---
+        orpo_config = ORPOConfig(
             output_dir=str(output_dir),
             num_train_epochs=tcfg.epochs,
             per_device_train_batch_size=batch_size,
@@ -122,15 +122,15 @@ class DPOTrainerWrapper:
             report_to=self.report_to,
             remove_unused_columns=False,
             deepspeed=self.deepspeed_config,
-            beta=tcfg.dpo_beta,
+            beta=tcfg.orpo_beta,
             max_length=cfg.data.max_length,
             max_prompt_length=cfg.data.max_length // 2,
         )
 
         # --- Trainer ---
-        self.trainer = DPOTrainer(
+        self.trainer = ORPOTrainer(
             model=self.model,
-            args=dpo_config,
+            args=orpo_config,
             train_dataset=train_ds,
             eval_dataset=eval_ds,
             processing_class=self.tokenizer,
@@ -138,7 +138,7 @@ class DPOTrainerWrapper:
 
         self._output_dir = str(output_dir)
 
-    def _setup_transformers(self, cfg, tcfg):
+    def _setup_transformers(self, cfg: SoupConfig, tcfg) -> None:
         """Load model via standard transformers + peft pipeline."""
         from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -162,7 +162,6 @@ class DPOTrainerWrapper:
             bnb_config = BitsAndBytesConfig(load_in_8bit=True)
 
         console.print(f"[dim]Loading model: {cfg.base}[/]")
-        # On CPU, use device_map="cpu" to avoid meta tensors from "auto"
         dev_map = "cpu" if self.device == "cpu" else "auto"
         model_kwargs = {"trust_remote_code": True, "device_map": dev_map}
         if bnb_config:
@@ -188,13 +187,12 @@ class DPOTrainerWrapper:
         )
         self.model = get_peft_model(self.model, lora_config)
 
-        # QAT — insert fake quantization ops after LoRA
         if tcfg.quantization_aware:
             from soup_cli.utils.qat import prepare_model_for_qat
 
             self.model = prepare_model_for_qat(self.model)
 
-    def _setup_unsloth(self, cfg, tcfg):
+    def _setup_unsloth(self, cfg: SoupConfig, tcfg) -> None:
         """Load model via unsloth FastLanguageModel (2-5x faster)."""
         from soup_cli.utils.unsloth import load_model_and_tokenizer
 
@@ -218,10 +216,14 @@ class DPOTrainerWrapper:
         run_id: str = "",
         resume_from_checkpoint: Optional[str] = None,
     ) -> dict:
-        """Run DPO training and return results summary."""
+        """Run ORPO training and return results summary."""
+        if self.trainer is None:
+            raise RuntimeError(
+                "ORPOTrainerWrapper.train() called before setup(). "
+                "Call setup(dataset) first."
+            )
         start = time.time()
 
-        # Add callback for live display and experiment tracking
         if display:
             from soup_cli.monitoring.callback import SoupTrainerCallback
 
@@ -232,11 +234,9 @@ class DPOTrainerWrapper:
         self.trainer.train(resume_from_checkpoint=resume_from_checkpoint)
         duration = time.time() - start
 
-        # Save final model (LoRA adapter)
         self.trainer.save_model(self._output_dir)
         self.tokenizer.save_pretrained(self._output_dir)
 
-        # Extract metrics
         logs = self.trainer.state.log_history
         train_losses = [entry["loss"] for entry in logs if "loss" in entry]
 

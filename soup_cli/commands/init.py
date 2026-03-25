@@ -17,7 +17,7 @@ def init(
         None,
         "--template",
         "-t",
-        help="Use a template: chat, code, medical, reasoning, vision, rlhf",
+        help="Use a template: chat, code, medical, reasoning, vision, rlhf, kto, orpo, simpo, ipo",
     ),
     output: str = typer.Option(
         "soup.yaml",
@@ -62,32 +62,56 @@ def _interactive_wizard() -> str:
         "Base model",
         default="meta-llama/Llama-3.1-8B-Instruct",
     )
-    task = Prompt.ask("Task", choices=["sft", "dpo", "grpo", "ppo", "reward_model"], default="sft")
-    data_path = Prompt.ask("Training data path", default="./data/train.jsonl")
-    data_format = Prompt.ask(
-        "Data format", choices=["alpaca", "sharegpt", "chatml"], default="alpaca",
+    task = Prompt.ask(
+        "Task",
+        choices=["sft", "dpo", "kto", "orpo", "simpo", "ipo", "grpo", "ppo", "reward_model"],
+        default="sft",
     )
+    data_path = Prompt.ask("Training data path", default="./data/train.jsonl")
+
+    # Preference tasks have fixed data formats — skip format prompt
+    if task in ("dpo", "orpo", "simpo", "ipo"):
+        data_format = "dpo"
+    elif task == "kto":
+        data_format = "kto"
+    else:
+        data_format = Prompt.ask(
+            "Data format", choices=["alpaca", "sharegpt", "chatml"], default="alpaca",
+        )
     epochs = Prompt.ask("Epochs", default="3")
     use_qlora = Prompt.ask("Use QLoRA (4-bit)?", choices=["yes", "no"], default="yes")
 
     quantization = "4bit" if use_qlora == "yes" else "none"
 
-    grpo_block = ""
+    task_block = ""
     if task == "grpo":
         reward_fn = Prompt.ask(
             "Reward function", choices=["accuracy", "format", "custom"], default="accuracy",
         )
         if reward_fn == "custom":
             reward_fn = Prompt.ask("Path to reward .py file", default="./reward.py")
-        grpo_block = f"""  grpo_beta: 0.1
+        task_block = f"""  grpo_beta: 0.1
   num_generations: 4
   reward_fn: {reward_fn}
+"""
+    elif task == "kto":
+        task_block = """  kto_beta: 0.1
+"""
+    elif task == "orpo":
+        task_block = """  orpo_beta: 0.1
+"""
+    elif task == "simpo":
+        task_block = """  simpo_gamma: 0.5
+  cpo_alpha: 1.0
+"""
+    elif task == "ipo":
+        task_block = """  ipo_tau: 0.1
 """
     elif task == "ppo":
         reward_model_path = Prompt.ask(
             "Reward model path", default="./output_rm",
         )
-        grpo_block = f"""  reward_model: {reward_model_path}
+        task_block = f"""  reward_model: {reward_model_path}
   ppo_epochs: 4
   ppo_clip_ratio: 0.2
   ppo_kl_penalty: 0.05
@@ -113,6 +137,6 @@ training:
     alpha: 16
     target_modules: auto
   quantization: {quantization}
-{grpo_block}
+{task_block}
 output: ./output
 """

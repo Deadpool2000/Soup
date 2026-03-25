@@ -5,6 +5,7 @@ Supported formats:
 - sharegpt: {"conversations": [{"from": "human", "value": ...}, ...]}
 - chatml: {"messages": [{"role": "user", "content": ...}, ...]}
 - dpo: {"prompt": ..., "chosen": ..., "rejected": ...}
+- kto: {"prompt": ..., "completion": ..., "label": true/false}
 - llava: {"image": ..., "conversations": [{"from": "human", "value": ...}, ...]}
 - sharegpt4v: {"image": ..., "conversations": [{"from": "human", "value": ...}, ...]}
 """
@@ -21,6 +22,7 @@ FORMAT_SIGNATURES = {
     "sharegpt": {"conversations"},
     "chatml": {"messages"},
     "dpo": {"prompt", "chosen", "rejected"},
+    "kto": {"prompt", "completion", "label"},
     "llava": {"image", "conversations"},
     "sharegpt4v": {"image", "conversations"},
 }
@@ -35,7 +37,7 @@ def detect_format(data: list[dict]) -> str:
     keys = set(sample.keys())
 
     # Check more specific formats first (llava/sharegpt4v before sharegpt)
-    check_order = ["alpaca", "llava", "dpo", "sharegpt", "chatml"]
+    check_order = ["alpaca", "llava", "kto", "dpo", "sharegpt", "chatml"]
     for fmt in check_order:
         required_keys = FORMAT_SIGNATURES[fmt]
         if required_keys.issubset(keys):
@@ -46,16 +48,22 @@ def detect_format(data: list[dict]) -> str:
         f"Expected one of: alpaca (instruction, output), "
         f"sharegpt (conversations), chatml (messages), "
         f"dpo (prompt, chosen, rejected), "
+        f"kto (prompt, completion, label), "
         f"llava/sharegpt4v (image, conversations)"
     )
 
 
 def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
-    """Convert any format to unified messages format for training.
+    """Convert any format to normalized structure for training.
 
-    Returns: {"messages": [{"role": ..., "content": ...}, ...]}
-    For vision formats, also includes "image" key.
+    Returns:
+    - SFT formats: {"messages": [{"role": ..., "content": ...}, ...]}
+    - Vision formats: {"messages": [...], "image": "path"}
+    - DPO format: {"prompt": ..., "chosen": ..., "rejected": ...}
+    - KTO format: {"prompt": ..., "completion": ..., "label": bool}
     """
+    if fmt not in ("chatml", "alpaca", "sharegpt", "dpo", "kto", "llava", "sharegpt4v"):
+        raise ValueError(f"Unknown format: {fmt}")
     try:
         if fmt == "chatml":
             return _convert_chatml(row)
@@ -65,11 +73,11 @@ def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
             return _convert_sharegpt(row)
         elif fmt == "dpo":
             return _convert_dpo(row)
-        elif fmt in ("llava", "sharegpt4v"):
-            return _convert_vision(row)
+        elif fmt == "kto":
+            return _convert_kto(row)
         else:
-            raise ValueError(f"Unknown format: {fmt}")
-    except (KeyError, TypeError, IndexError):
+            return _convert_vision(row)
+    except (KeyError, TypeError, IndexError, ValueError):
         return None
 
 
@@ -114,6 +122,28 @@ def _convert_dpo(row: dict) -> dict:
         "prompt": row["prompt"],
         "chosen": row["chosen"],
         "rejected": row["rejected"],
+    }
+
+
+def _convert_kto(row: dict) -> dict:
+    """Convert KTO row to {prompt, completion, label} for trl.KTOTrainer."""
+    raw_label = row["label"]
+    if isinstance(raw_label, str):
+        low = raw_label.strip().lower()
+        if low in ("true", "1", "yes"):
+            label = True
+        elif low in ("false", "0", "no"):
+            label = False
+        else:
+            raise ValueError(
+                f"KTO label must be true/false, got string: {raw_label!r}"
+            )
+    else:
+        label = bool(raw_label)
+    return {
+        "prompt": row["prompt"],
+        "completion": row["completion"],
+        "label": label,
     }
 
 

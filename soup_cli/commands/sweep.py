@@ -287,6 +287,7 @@ def _set_nested_param(config_dict: dict, key: str, value) -> dict:
         "val_split": "data.val_split",
         "max_length": "data.max_length",
         "dpo_beta": "training.dpo_beta",
+        "kto_beta": "training.kto_beta",
         "grpo_beta": "training.grpo_beta",
         "num_generations": "training.num_generations",
         "reward_fn": "training.reward_fn",
@@ -294,6 +295,14 @@ def _set_nested_param(config_dict: dict, key: str, value) -> dict:
         "ppo_clip_ratio": "training.ppo_clip_ratio",
         "ppo_kl_penalty": "training.ppo_kl_penalty",
         "reward_model": "training.reward_model",
+        "orpo_beta": "training.orpo_beta",
+        "simpo_gamma": "training.simpo_gamma",
+        "cpo_alpha": "training.cpo_alpha",
+        "ipo_tau": "training.ipo_tau",
+        "loraplus_lr_ratio": "training.loraplus_lr_ratio",
+        "use_dora": "training.lora.use_dora",
+        "use_galore": "training.use_galore",
+        "galore_rank": "training.galore_rank",
         "backend": "backend",
     }
 
@@ -351,6 +360,10 @@ def _run_single(base_cfg, params: dict, run_name: str, config_path: Path) -> dic
         from soup_cli.trainer.dpo import DPOTrainerWrapper
 
         trainer_wrapper = DPOTrainerWrapper(cfg, device=device)
+    elif cfg.task == "kto":
+        from soup_cli.trainer.kto import KTOTrainerWrapper
+
+        trainer_wrapper = KTOTrainerWrapper(cfg, device=device)
     elif cfg.task == "grpo":
         from soup_cli.trainer.grpo import GRPOTrainerWrapper
 
@@ -359,6 +372,18 @@ def _run_single(base_cfg, params: dict, run_name: str, config_path: Path) -> dic
         from soup_cli.trainer.ppo import PPOTrainerWrapper
 
         trainer_wrapper = PPOTrainerWrapper(cfg, device=device)
+    elif cfg.task == "orpo":
+        from soup_cli.trainer.orpo import ORPOTrainerWrapper
+
+        trainer_wrapper = ORPOTrainerWrapper(cfg, device=device)
+    elif cfg.task == "simpo":
+        from soup_cli.trainer.simpo import SimPOTrainerWrapper
+
+        trainer_wrapper = SimPOTrainerWrapper(cfg, device=device)
+    elif cfg.task == "ipo":
+        from soup_cli.trainer.ipo import IPOTrainerWrapper
+
+        trainer_wrapper = IPOTrainerWrapper(cfg, device=device)
     elif cfg.task == "reward_model":
         from soup_cli.trainer.reward_model import RewardModelTrainerWrapper
 
