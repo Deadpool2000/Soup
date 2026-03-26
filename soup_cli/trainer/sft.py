@@ -424,7 +424,7 @@ class SFTTrainerWrapper:
         """Load audio-language model via transformers (Qwen2-Audio, Whisper, etc.)."""
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
         from rich.panel import Panel as RichPanel
-        from transformers import AutoModelForCausalLM, AutoProcessor, BitsAndBytesConfig
+        from transformers import AutoModel, AutoProcessor, BitsAndBytesConfig
 
         console.print(
             RichPanel(
@@ -461,7 +461,9 @@ class SFTTrainerWrapper:
         if bnb_config:
             model_kwargs["quantization_config"] = bnb_config
 
-        self.model = AutoModelForCausalLM.from_pretrained(cfg.base, **model_kwargs)
+        # Use AutoModel for audio models — AutoModelForCausalLM doesn't handle
+        # audio-language architectures (Qwen2-Audio, Whisper, etc.)
+        self.model = AutoModel.from_pretrained(cfg.base, **model_kwargs)
 
         if tcfg.quantization in ("4bit", "8bit"):
             self.model = prepare_model_for_kbit_training(self.model)
@@ -484,6 +486,14 @@ class SFTTrainerWrapper:
     def _prepare_audio_dataset(self, dataset: dict):
         """Prepare dataset for audio fine-tuning with audio loading."""
         from datasets import Dataset
+
+        try:
+            import librosa  # noqa: F401
+        except ImportError:
+            raise ImportError(
+                "librosa is required for audio training. "
+                "Install with: pip install 'soup-cli[audio]'"
+            )
 
         def load_and_format_audio(example):
             import librosa

@@ -195,7 +195,7 @@ def _validate_audio_files(data: list[dict], audio_dir: Path) -> list[dict]:
             audio_path = audio_dir / audio_path
         # Path traversal protection: resolved path must stay under audio_dir
         resolved = audio_path.resolve()
-        if not str(resolved).startswith(str(resolved_base)):
+        if not resolved.is_relative_to(resolved_base):
             traversal += 1
             continue
         valid.append({**row, "audio": str(resolved)})
