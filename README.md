@@ -1231,6 +1231,43 @@ Soup works with **any** of the **340,000+** text-generation models on [HuggingFa
 | `tensorrt` | `pip install 'soup-cli[tensorrt]'` | TensorRT-LLM export (high-throughput GPU inference) |
 | `dev` | `pip install 'soup-cli[dev]'` | Tests + linting (pytest, ruff) |
 
+## Troubleshooting
+
+### `ImportError: DLL load failed while importing _C` (Windows)
+
+PyTorch's C extension fails to load. Common causes:
+
+```bash
+# Fix: reinstall PyTorch with the correct CUDA version
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# Or for CPU-only
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+### Multiple Python versions conflict
+
+If `pip show soup-cli` shows a different version than `soup version`, you have multiple Python installations with separate packages.
+
+```bash
+# Check which Python is active
+python --version
+which python    # Linux/macOS
+where python    # Windows
+
+# Fix: use a virtual environment
+python -m venv .venv
+source .venv/bin/activate    # Linux/macOS
+.venv\Scripts\activate       # Windows
+pip install soup-cli
+```
+
+### Quick environment check
+
+```bash
+soup doctor    # Shows GPU, dependencies, and version info
+```
+
 ## Development
 
 ```bash
