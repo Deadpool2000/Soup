@@ -3,6 +3,8 @@
 from unittest.mock import MagicMock
 from unittest.mock import patch as mock_patch
 
+import pytest
+
 # ─── SGLang Detection Tests ──────────────────────────────────────────────
 
 
@@ -254,3 +256,49 @@ class TestDoctorSGLang:
 
         pkg_names = [dep[1] for dep in DEPS]
         assert "librosa" in pkg_names
+
+
+# ─── SGLang SSRF Validation Tests ────────────────────────────────────────
+
+
+class TestSGLangSSRF:
+    """Test SSRF protection in SGLang runtime creation."""
+
+    def test_create_runtime_blocks_http_model_path(self):
+        """HTTP URLs for model_path should be rejected."""
+        mock_sgl = MagicMock()
+
+        with mock_patch.dict("sys.modules", {"sglang": mock_sgl}):
+            from soup_cli.utils.sglang import create_sglang_runtime
+
+            with pytest.raises(ValueError, match="not a URL"):
+                create_sglang_runtime(
+                    model_path="http://evil.com/model",
+                )
+
+    def test_create_runtime_blocks_http_base_model(self):
+        """HTTP URLs for base_model should be rejected."""
+        mock_sgl = MagicMock()
+
+        with mock_patch.dict("sys.modules", {"sglang": mock_sgl}):
+            from soup_cli.utils.sglang import create_sglang_runtime
+
+            with pytest.raises(ValueError, match="not a URL"):
+                create_sglang_runtime(
+                    model_path="/path/to/adapter",
+                    base_model="https://evil.com/model",
+                    is_adapter=True,
+                )
+
+    def test_create_runtime_allows_hf_model_id(self):
+        """HuggingFace model IDs should be allowed."""
+        mock_sgl = MagicMock()
+        mock_sgl.Runtime.return_value = MagicMock()
+
+        with mock_patch.dict("sys.modules", {"sglang": mock_sgl}):
+            from soup_cli.utils.sglang import create_sglang_runtime
+
+            runtime, name = create_sglang_runtime(
+                model_path="meta-llama/Llama-3.1-8B",
+            )
+        assert name == "meta-llama/Llama-3.1-8B"
