@@ -25,6 +25,7 @@ from soup_cli.commands import (
 )
 from soup_cli.commands import doctor as doctor_cmd
 from soup_cli.commands import quickstart as quickstart_cmd
+from soup_cli.utils.constants import GITHUB_URL
 
 console = Console()
 
@@ -33,7 +34,10 @@ _verbose = False
 
 app = typer.Typer(
     name="soup",
-    help="Fine-tune LLMs in one command. No SSH, no config hell.",
+    help=(
+        "Fine-tune LLMs in one command. No SSH, no config hell.\n\n"
+        f"[dim]GitHub: {GITHUB_URL}[/]"
+    ),
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -70,6 +74,7 @@ def version(
     """Show Soup CLI version."""
     if not full:
         console.print(f"[bold green]soup[/] v{__version__}")
+        console.print(f"[dim]{GITHUB_URL}[/]")
         return
 
     import platform
@@ -109,6 +114,7 @@ def version(
         parts.append(f"extras: {', '.join(extras)}")
 
     console.print(" | ".join(parts))
+    console.print(f"[dim]GitHub: [link={GITHUB_URL}]{GITHUB_URL}[/link][/]")
 
 
 @app.callback(invoke_without_command=True)

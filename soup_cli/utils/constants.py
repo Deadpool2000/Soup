@@ -4,6 +4,7 @@ APP_NAME = "soup"
 CONFIG_FILE = "soup.yaml"
 SOUP_DIR = ".soup"
 EXPERIMENTS_DB = "experiments.db"
+GITHUB_URL = "https://github.com/MakazhanAlpamys/Soup"
 
 DEFAULT_CHAT_TEMPLATE = (
     "{% for message in messages %}"

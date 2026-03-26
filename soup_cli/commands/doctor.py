@@ -7,6 +7,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from soup_cli.utils.constants import GITHUB_URL
+
 console = Console()
 
 # Dependencies to check: (import_name, package_name, min_version, required)
@@ -117,6 +119,8 @@ def doctor():
         ) + "[/]")
     else:
         console.print("\n[bold green]All checks passed![/] Your environment is ready.")
+
+    console.print(f"\n[dim]GitHub: [link={GITHUB_URL}]{GITHUB_URL}[/link][/]")
 
 
 def _check_gpu():
