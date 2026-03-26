@@ -516,6 +516,12 @@ class SFTTrainerWrapper:
                 result["sampling_rate"] = sampling_rate
             return result
 
+        if not dataset["train"]:
+            raise ValueError(
+                "Audio training dataset is empty after validation. "
+                "Check audio file paths and audio_dir."
+            )
+
         remove_cols = ["messages", "audio"]
         train_ds = Dataset.from_list(dataset["train"]).map(
             load_and_format_audio,

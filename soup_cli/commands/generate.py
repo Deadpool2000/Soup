@@ -454,7 +454,10 @@ def _generate_server(
         )
 
     data = response.json()
-    content = data["choices"][0]["message"]["content"]
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError(f"Unexpected server response format: {exc}") from exc
 
     return _parse_json_array(content)
 

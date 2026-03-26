@@ -78,6 +78,11 @@ def compute_perplexity_scores(
                 ppl = math.exp(min(loss_val.item(), 100))  # cap to avoid overflow
                 scores.append(ppl)
 
+    # Cleanup GPU memory
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return scores
 
 

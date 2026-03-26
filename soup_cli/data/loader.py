@@ -198,8 +198,7 @@ def _validate_audio_files(data: list[dict], audio_dir: Path) -> list[dict]:
         if not str(resolved).startswith(str(resolved_base)):
             traversal += 1
             continue
-        row["audio"] = str(resolved)
-        valid.append(row)
+        valid.append({**row, "audio": str(resolved)})
 
     if missing > 0:
         console.print(f"[yellow]Warning: {missing} rows skipped (missing audio path)[/]")
