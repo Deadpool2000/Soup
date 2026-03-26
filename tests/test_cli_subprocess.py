@@ -56,9 +56,10 @@ class TestEntryPoint:
 
     def test_no_args_shows_help(self):
         result = run_soup()
-        # Typer shows help when no args, exit code 0
-        assert result.returncode == 0
-        assert "Fine-tune" in result.stdout or "Usage" in result.stdout
+        # Typer with no_args_is_help=True returns exit code 0 or 2
+        assert result.returncode in (0, 2)
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "Fine-tune" in combined or "Usage" in combined
 
     def test_help_flag(self):
         result = run_soup("--help")
@@ -150,8 +151,10 @@ class TestCommandHelp:
 
     def test_data_no_args_shows_help(self):
         result = run_soup("data")
-        assert result.returncode == 0
-        assert "inspect" in result.stdout.lower() or "Usage" in result.stdout
+        # Typer returns 0 or 2 depending on no_args_is_help vs missing args
+        assert result.returncode in (0, 2)
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "inspect" in combined.lower() or "usage" in combined.lower()
 
     def test_runs_lists_or_shows_help(self):
         result = run_soup("runs")
