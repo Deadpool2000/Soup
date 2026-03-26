@@ -1,9 +1,16 @@
 """Tests for speculative decoding — CLI flags, model loading, serve integration."""
 
+import re
 from unittest.mock import MagicMock
 from unittest.mock import patch as mock_patch
 
 import pytest
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from Rich-formatted output."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
 
 # ─── CLI Flag Tests ──────────────────────────────────────────────────────
 
@@ -20,7 +27,7 @@ class TestSpeculativeDecodingCLI:
         runner = CliRunner()
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
-        assert "--speculative-decoding" in result.output
+        assert "--speculative-decoding" in _strip_ansi(result.output)
 
     def test_serve_spec_tokens_flag_exists(self):
         """The serve command should accept --num-speculative-tokens flag."""
@@ -31,7 +38,7 @@ class TestSpeculativeDecodingCLI:
         runner = CliRunner()
         result = runner.invoke(app, ["serve", "--help"])
         assert result.exit_code == 0
-        assert "--num-speculative-tokens" in result.output
+        assert "--num-speculative-tokens" in _strip_ansi(result.output)
 
 
 # ─── Draft Model Loading Tests ────────────────────────────────────────────
