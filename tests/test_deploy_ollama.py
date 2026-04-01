@@ -469,6 +469,14 @@ def test_deploy_remove_failure(mock_rm, mock_detect):
     assert "not found" in result.output.lower()
 
 
+def test_deploy_remove_invalid_name():
+    result = runner.invoke(
+        app, ["deploy", "ollama", "--remove", "bad/name", "--yes"]
+    )
+    assert result.exit_code == 1
+    assert "invalid" in result.output.lower()
+
+
 @patch(f"{_OLLAMA}.detect_ollama", return_value=None)
 def test_deploy_remove_no_ollama(mock_detect):
     result = runner.invoke(app, ["deploy", "ollama", "--remove", "soup-test", "--yes"])

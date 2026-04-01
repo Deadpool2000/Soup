@@ -99,6 +99,11 @@ def ollama(
 
     # --- Remove mode ---
     if remove:
+        valid_name, name_err = validate_model_name(remove)
+        if not valid_name:
+            console.print(f"[red]Invalid model name:[/] {name_err}")
+            raise typer.Exit(1)
+
         version = detect_ollama()
         if not version:
             console.print("[red]Ollama not found.[/] Install from https://ollama.com")
