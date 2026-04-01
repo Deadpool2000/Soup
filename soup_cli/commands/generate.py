@@ -194,10 +194,15 @@ def generate(
         filter_output = True
         dedup_output = True
 
+    cwd = Path.cwd().resolve()
+
     # Load seed examples if provided
     seed_examples = []
     if seed_file:
-        seed_path = Path(seed_file)
+        seed_path = Path(seed_file).resolve()
+        if not _path_within_cwd(seed_path, cwd):
+            console.print("[red]Seed file must be within the current directory[/]")
+            raise typer.Exit(1)
         if not seed_path.exists():
             console.print(f"[red]Seed file not found: {seed_path}[/]")
             raise typer.Exit(1)
@@ -209,7 +214,10 @@ def generate(
     # Load existing data for dedup
     existing_texts = set()
     if dedup_with:
-        dedup_path = Path(dedup_with)
+        dedup_path = Path(dedup_with).resolve()
+        if not _path_within_cwd(dedup_path, cwd):
+            console.print("[red]Dedup file must be within the current directory[/]")
+            raise typer.Exit(1)
         if not dedup_path.exists():
             console.print(f"[red]Dedup file not found: {dedup_path}[/]")
             raise typer.Exit(1)
@@ -223,7 +231,10 @@ def generate(
     # Load template context if provided
     context_text = ""
     if template_context:
-        ctx_path = Path(template_context)
+        ctx_path = Path(template_context).resolve()
+        if not _path_within_cwd(ctx_path, cwd):
+            console.print("[red]Context file must be within the current directory[/]")
+            raise typer.Exit(1)
         if not ctx_path.exists():
             console.print(f"[red]Context file not found: {ctx_path}[/]")
             raise typer.Exit(1)
@@ -294,9 +305,9 @@ def generate(
             progress.update(task, advance=generated_this_round)
 
     # Sanitize output path (prevent path traversal)
-    out_path = Path(output)
-    if ".." in out_path.parts:
-        console.print("[red]Output path must not contain '..'[/]")
+    out_path = Path(output).resolve()
+    if not _path_within_cwd(out_path, cwd):
+        console.print("[red]Output path must be within the current directory[/]")
         raise typer.Exit(1)
 
     # Write output
@@ -904,6 +915,15 @@ def _validate_preference(example: dict) -> bool:
     if "prompt" in example and "completion" in example and "label" in example:
         return True
     return False
+
+
+def _path_within_cwd(path: Path, cwd: Path) -> bool:
+    """Check that a resolved path is within the current working directory."""
+    try:
+        path.relative_to(cwd)
+        return True
+    except ValueError:
+        return False
 
 
 def _row_to_text(row: dict) -> str:

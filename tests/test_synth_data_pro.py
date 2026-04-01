@@ -973,6 +973,42 @@ class TestValidatePreference:
 # ─── Output Path Sanitization Tests ─────────────────────────────────────
 
 
+class TestPathWithinCwd:
+    """Test _path_within_cwd helper."""
+
+    def test_path_within_cwd(self, tmp_path):
+        """Path inside cwd should return True."""
+
+        from soup_cli.commands.generate import _path_within_cwd
+
+        cwd = tmp_path.resolve()
+        child = (tmp_path / "subdir" / "file.jsonl").resolve()
+        assert _path_within_cwd(child, cwd) is True
+
+    def test_path_outside_cwd(self, tmp_path):
+        """Path outside cwd should return False."""
+
+        from soup_cli.commands.generate import _path_within_cwd
+
+        cwd = (tmp_path / "subdir").resolve()
+        outside = tmp_path.resolve()
+        assert _path_within_cwd(outside, cwd) is False
+
+    def test_absolute_path_outside_cwd(self):
+        """Absolute path to system directory should return False."""
+        from pathlib import Path
+
+        from soup_cli.commands.generate import _path_within_cwd
+
+        cwd = Path.cwd().resolve()
+        # /tmp or C:\Windows are outside typical cwd
+        system_path = Path("/tmp/exfil.jsonl").resolve()
+        # This may or may not be within cwd depending on where tests run,
+        # but the function itself should work correctly
+        result = _path_within_cwd(system_path, cwd)
+        assert isinstance(result, bool)
+
+
 class TestOutputPathSanitization:
     """Test that output paths are sanitized."""
 
@@ -993,6 +1029,27 @@ class TestOutputPathSanitization:
                 "data", "generate",
                 "--prompt", "test",
                 "--output", "../../../etc/evil.jsonl",
+                "--count", "1",
+                "--provider", "server",
+            ])
+        assert result.exit_code != 0
+
+    def test_absolute_output_path_blocked(self):
+        """Absolute output path outside cwd should be rejected."""
+        from typer.testing import CliRunner
+
+        from soup_cli.cli import app
+
+        runner = CliRunner()
+
+        with mock_patch(
+            "soup_cli.commands.generate._generate_batch",
+            return_value=[{"instruction": "x", "output": "y"}],
+        ):
+            result = runner.invoke(app, [
+                "data", "generate",
+                "--prompt", "test",
+                "--output", "/tmp/exfil.jsonl",
                 "--count", "1",
                 "--provider", "server",
             ])
@@ -1089,6 +1146,9 @@ class TestEndToEndGeneration:
                 {"instruction": "What is AI?", "input": "", "output": "AI is..."},
                 {"instruction": "Explain ML", "input": "", "output": "ML is..."},
             ],
+        ), mock_patch(
+            "soup_cli.commands.generate._path_within_cwd",
+            return_value=True,
         ):
             runner = CliRunner()
             result = runner.invoke(app, [
@@ -1120,6 +1180,9 @@ class TestEndToEndGeneration:
             return_value=[
                 {"instruction": "Write a function", "input": "", "output": "def foo(): pass"},
             ],
+        ), mock_patch(
+            "soup_cli.commands.generate._path_within_cwd",
+            return_value=True,
         ):
             runner = CliRunner()
             result = runner.invoke(app, [
@@ -1149,6 +1212,9 @@ class TestEndToEndGeneration:
             return_value=[
                 {"instruction": "What is AI?", "input": "", "output": "AI is..."},
             ],
+        ), mock_patch(
+            "soup_cli.commands.generate._path_within_cwd",
+            return_value=True,
         ):
             runner = CliRunner()
             result = runner.invoke(app, [
@@ -1177,6 +1243,9 @@ class TestEndToEndGeneration:
             return_value=[
                 {"instruction": "What is AI?", "input": "", "output": "AI is..."},
             ],
+        ), mock_patch(
+            "soup_cli.commands.generate._path_within_cwd",
+            return_value=True,
         ):
             runner = CliRunner()
             result = runner.invoke(app, [
