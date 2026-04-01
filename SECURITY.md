@@ -4,14 +4,14 @@
 
 We provide security updates for the following versions:
 
-- **Latest minor version:** Active support (e.g., v0.19.x)
+- **Latest minor version:** Active support (e.g., v0.20.x)
 - **Previous minor versions:** Bug-fix support only
 - **Versions older than 3 minor versions:** No support
 
 Example:
-- v0.19.0-0.19.x → Full support (latest)
-- v0.18.0-0.18.x → Bug-fix support only
-- v0.17.x and below → No support
+- v0.20.0-0.20.x → Full support (latest)
+- v0.19.0-0.19.x → Bug-fix support only
+- v0.18.x and below → No support
 
 ## Reporting a Vulnerability
 
@@ -121,6 +121,8 @@ No known critical vulnerabilities in current releases.
 - **v0.16.0**: `embedding_loss` Literal constraint, `embedding_margin` gt=0 validation, ONNX export without trust_remote_code (with warning), TensorRT export subprocess list args (no shell injection), speculative decoding SSRF-protected (URL blocked) with warning panel, vLLM speculative model URL validation
 - **v0.17.0**: Server data generation provider SSRF validation (scheme whitelist + localhost-only HTTP), audio model trust_remote_code warning panel, audio file path traversal protection (resolved paths confined to audio_dir), SGLang backend trust_remote_code warning panel
 - **v0.18.0**: Ollama deploy GGUF path traversal protection + `.gguf` extension validation, model name validation (no path separators/null bytes), subprocess list args (no shell injection), Modelfile parameter key allowlist + value newline/null sanitization, overwrite warning panel
+- **v0.19.0**: Custom eval JSONL schema validation + 10k task cap, regex scoring ReDoS guard, judge API SSRF protection + API key isolation, human eval local-only terminal UI + 10k prompt cap, leaderboard read-only SQLite queries
+- **v0.20.0**: Ollama provider localhost-only validation (remote blocked), Anthropic provider API key from env only (never CLI arg), vLLM provider SSRF protection (scheme whitelist + localhost-only HTTP), output path traversal protection (`..` blocked), configurable rate limiting (`--requests-per-minute`)
 
 ## Security Scanning
 

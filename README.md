@@ -876,6 +876,55 @@ soup data generate --prompt "..." --seed examples.jsonl --count 100
 soup data generate --prompt "..." --provider server --api-base http://localhost:11434/v1
 ```
 
+### Multi-Provider Support (v0.20.0+)
+
+```bash
+# Generate via local Ollama instance
+soup data generate --prompt "..." --provider ollama --model llama3.1
+soup data generate --prompt "..." --ollama-model llama3.1  # shorthand
+
+# Generate via Anthropic Claude API (set ANTHROPIC_API_KEY env var)
+soup data generate --prompt "..." --provider anthropic --model claude-3-haiku-20240307
+
+# Generate via local vLLM server
+soup data generate --prompt "..." --provider vllm --model meta-llama/Llama-3.1-8B-Instruct
+```
+
+### Domain Templates (v0.20.0+)
+
+```bash
+# Code instruction pairs (Python, JS, Go, Rust, Java)
+soup data generate --prompt "..." --template code --language Python --task-type function
+
+# Multi-turn conversations
+soup data generate --prompt "..." --template conversation --turns 6 --topic "science"
+
+# QA from context document
+soup data generate --prompt "..." --template qa --context document.txt
+
+# Preference data (DPO/KTO/ORPO)
+soup data generate --prompt "..." --template preference --pref-task dpo
+
+# Chain-of-thought reasoning (GRPO)
+soup data generate --prompt "..." --template reasoning --domain math
+```
+
+### Quality Pipeline (v0.20.0+)
+
+```bash
+# Auto-validate after generation (remove malformed entries)
+soup data generate --prompt "..." --validate
+
+# Auto-filter by quality (coherence scoring)
+soup data generate --prompt "..." --filter
+
+# Auto-dedup (MinHash, requires: pip install 'soup-cli[data]')
+soup data generate --prompt "..." --dedup
+
+# Full quality pipeline: validate + filter + dedup
+soup data generate --prompt "..." --quality-pipeline
+```
+
 ## Hyperparameter Sweep
 
 Search for the best hyperparameters:
@@ -1227,7 +1276,11 @@ soup data merge data1.jsonl data2.jsonl       Combine datasets
 soup data dedup <path> --threshold 0.8        Remove duplicates (MinHash)
 soup data stats <path>                        Extended statistics
 soup data generate --prompt "..." --count 100 Generate synthetic data
-soup data generate ... --provider server      Use local inference server
+soup data generate ... --provider ollama      Use local Ollama instance
+soup data generate ... --provider anthropic   Use Claude API
+soup data generate ... --provider vllm        Use local vLLM server
+soup data generate ... --template code        Domain templates (code/conversation/qa/preference/reasoning)
+soup data generate ... --quality-pipeline     Auto validate + filter + dedup
 soup data filter <path> --coherence 0.3       Quality filter (perplexity/coherence)
 soup runs                                     List training runs
 soup runs show <run_id>                       Run details + loss graph

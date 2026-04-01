@@ -1,12 +1,12 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.19.0). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.20.0). Python 3.9+, MIT license.
 
 ## Build & Development
 
 ```bash
 pip install -e ".[dev]"          # Install editable + test deps
-pytest tests/ -v --tb=short      # Run all tests (1577 tests)
+pytest tests/ -v --tb=short      # Run all tests (1669 tests)
 ruff check soup_cli/ tests/      # Lint (must pass before commit)
 ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
@@ -16,7 +16,7 @@ ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
 soup_cli/
   cli.py              # Entry point, Typer app, all command registration
-  __init__.py          # __version__ = "0.19.0"
+  __init__.py          # __version__ = "0.20.0"
   config/
     schema.py          # Pydantic models (SoupConfig, DataConfig, TrainingConfig, LoraConfig, EvalConfig)
     loader.py          # YAML -> SoupConfig, load_config_from_string()
@@ -24,6 +24,16 @@ soup_cli/
     loader.py          # Local files (JSONL/JSON/CSV/Parquet) + HF datasets
     formats.py         # Auto-detect + normalize to {"messages": [...]} structure
     validator.py       # Dataset stats, quality checks, extended_stats()
+    providers/
+      ollama.py        # Ollama provider for synth data gen (localhost-only)
+      anthropic.py     # Anthropic Claude provider (env-only API key)
+      vllm.py          # vLLM provider for synth data gen (SSRF-protected)
+    templates/
+      code.py          # Code instruction pairs template
+      conversation.py  # Multi-turn conversation template
+      qa.py            # QA from context template
+      preference.py    # DPO/KTO/ORPO preference data template
+      reasoning.py     # Chain-of-thought / GRPO reasoning template
   trainer/
     sft.py             # SFTTrainerWrapper (415 lines, supports vision + unsloth + QAT)
     dpo.py             # DPOTrainerWrapper (253 lines)
@@ -124,7 +134,7 @@ soup data convert      # Transform between alpaca/sharegpt/chatml
 soup data merge        # Combine multiple datasets
 soup data dedup        # MinHash deduplication
 soup data stats        # Extended statistics with histograms
-soup data generate     # Synthetic data via LLM APIs (--provider openai|local|server)
+soup data generate     # Synthetic data via LLM APIs (--provider openai|local|server|ollama|anthropic|vllm)
 soup data filter       # Quality filter (perplexity + coherence scoring)
 soup runs              # List experiment runs
 soup runs show <id>    # Detailed run info + metrics
@@ -223,6 +233,11 @@ soup version           # Show version (--full for details)
 - **Human eval**: local-only terminal UI, no network access (v0.19.0)
 - **Human eval**: prompts file capped at 10k entries (v0.19.0)
 - **Leaderboard**: read-only SQLite queries, no user input in SQL (v0.19.0)
+- **Ollama provider**: localhost-only validation — remote Ollama instances blocked (v0.20.0)
+- **Anthropic provider**: API key from env only (ANTHROPIC_API_KEY), never CLI arg (v0.20.0)
+- **vLLM provider**: SSRF protection — scheme whitelist, localhost-only HTTP (v0.20.0)
+- **Output path**: path traversal protection — `..` blocked in output filenames (v0.20.0)
+- **Rate limiting**: configurable `--requests-per-minute` (default: 60) (v0.20.0)
 
 ## Code Conventions
 
@@ -292,7 +307,7 @@ soup version           # Show version (--full for details)
 15. **Tag**: `git tag v0.X.Y && git push origin v0.X.Y`
 16. **Release**: `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
 
-## Tests (58 test files, 1577 tests)
+## Tests (59 test files, 1669 tests)
 
 | File | Covers |
 |------|--------|
@@ -353,3 +368,4 @@ soup version           # Show version (--full for details)
 | test_sglang_serve.py | SGLang backend detection, runtime creation, serve --backend |
 | test_deploy_ollama.py | Ollama deploy, Modelfile gen, template mapping, security validation |
 | test_eval_platform.py | Custom eval, judge, human eval (Elo), leaderboard, compare, auto-eval, security |
+| test_synth_data_pro.py | Providers (Ollama, Anthropic, vLLM), templates, quality pipeline, SSRF |
