@@ -6,10 +6,16 @@ quality pipeline (validate, filter, dedup), and security (SSRF).
 
 import json
 import os
+import re
 from unittest.mock import MagicMock
 from unittest.mock import patch as mock_patch
 
 import pytest
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from Rich-formatted output."""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
 
 # ─── Provider Validation Tests ──────────────────────────────────────────
 
@@ -110,7 +116,8 @@ class TestNewProvidersCLIHelp:
 
         runner = CliRunner()
         result = runner.invoke(app, ["data", "generate", "--help"])
-        assert "quality-pipeline" in result.output
+        clean = _strip_ansi(result.output)
+        assert "quality-pipeline" in clean
 
 
 # ─── Ollama Provider Tests ──────────────────────────────────────────────
@@ -1049,10 +1056,11 @@ class TestQualityPipelineFlag:
         # We can test this by checking the help text mentions the flag
         runner = CliRunner()
         result = runner.invoke(app, ["data", "generate", "--help"])
-        assert "quality-pipeline" in result.output
-        assert "validate" in result.output
-        assert "filter" in result.output
-        assert "dedup" in result.output
+        clean = _strip_ansi(result.output)
+        assert "quality-pipeline" in clean
+        assert "validate" in clean
+        assert "filter" in clean
+        assert "dedup" in clean
 
 
 # ─── Preference Validation Tests ────────────────────────────────────────
@@ -1182,7 +1190,8 @@ class TestOllamaModelShorthand:
 
         runner = CliRunner()
         result = runner.invoke(app, ["data", "generate", "--help"])
-        assert "ollama-model" in result.output
+        clean = _strip_ansi(result.output)
+        assert "ollama-model" in clean
 
 
 # ─── Rate Limiting Tests ────────────────────────────────────────────────
@@ -1199,7 +1208,8 @@ class TestRateLimiting:
 
         runner = CliRunner()
         result = runner.invoke(app, ["data", "generate", "--help"])
-        assert "requests-per-minute" in result.output or "rpm" in result.output
+        clean = _strip_ansi(result.output)
+        assert "requests-per-minute" in clean or "rpm" in clean
 
 
 # ─── Format Spec Tests ──────────────────────────────────────────────────
