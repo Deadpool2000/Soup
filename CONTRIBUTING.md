@@ -13,6 +13,8 @@ cd Soup
 
 ### 2. Set Up Development Environment
 
+**Requirements:** Python 3.9+
+
 Install the project in editable mode with dev dependencies:
 
 ```bash
@@ -39,6 +41,8 @@ Run the linter:
 ruff check soup_cli/ tests/
 ```
 
+If both pass — you're ready to contribute!
+
 ## Code Style
 
 We use **ruff** for all code style and linting. Before committing, run:
@@ -64,7 +68,7 @@ ruff check --fix soup_cli/ tests/
 Example:
 
 ```python
-# ❌ WRONG
+# WRONG
 from torch import cuda
 import transformers
 
@@ -72,11 +76,11 @@ def train():
     print("Starting training")
     model = transformers.AutoModel.from_pretrained("llama-7b")
 
-# ✅ CORRECT
+# CORRECT
 def train():
     from torch import cuda
     import transformers
-    
+
     console = Console()
     console.print("Starting training")
     model = transformers.AutoModel.from_pretrained("llama-7b")
@@ -89,19 +93,19 @@ Key directories:
 ```
 soup_cli/
   cli.py              - Main entry point, command routing
-  commands/           - Command implementations (train, chat, eval, etc.)
+  commands/           - Command implementations (train, chat, eval, deploy, etc.)
   config/             - Config schema (schema.py) and loader (loader.py)
-  data/               - Data loading and format conversion
+  data/               - Data loading, format conversion, providers, templates
   trainer/            - Training wrappers (SFT, DPO, GRPO, PPO, KTO, ORPO, SimPO, IPO, Pretrain, Reward Model, Embedding)
   monitoring/         - Callbacks and live dashboard
   experiment/         - SQLite experiment tracking
   eval/               - Eval platform (custom tasks, LLM judge, human eval, leaderboard)
   migrate/            - Config migration (LLaMA-Factory, Axolotl, Unsloth)
-  recipes/            - Ready-made configs for popular models (30 recipes)
-  utils/              - GPU, errors, MoE, GaLore, QAT, Unsloth, vLLM, SGLang, Liger, FlashAttn, FSDP, Ring Attention, long-context, quality
+  recipes/            - Ready-made configs for popular models (29 recipes)
+  utils/              - GPU, errors, MoE, GaLore, QAT, Unsloth, vLLM, SGLang, Liger, FlashAttn, FSDP, Ring Attention, long-context, quality, curriculum, freeze, registry
   ui/                 - Web UI (FastAPI + HTML/JS SPA)
 
-tests/                - Test suite (62 files, 1789 tests)
+tests/                - Test suite (74 files, 2061 tests)
 examples/             - Real-world config examples and datasets
 ```
 
@@ -131,20 +135,83 @@ pytest tests/test_data.py::test_detect_alpaca_format -v
 pytest tests/ --cov=soup_cli --cov-report=html
 ```
 
-### Test Categories
+### Test Files (74 files)
 
-- `test_config.py` — Config loading and validation
-- `test_data.py` — Data format detection and conversion
-- `test_cli.py` — Command-line interface tests
-- `test_errors.py` — Error message handling
-- `test_smoke_train.py` — Full pipeline tests (GPU required)
-- `test_grpo.py`, `test_ppo.py`, `test_kto.py`, `test_orpo.py`, `test_simpo.py`, `test_ipo.py` — Trainer-specific tests
-- `test_pretrain.py`, `test_moe.py` — Pre-training and MoE tests
-- `test_serve.py`, `test_vllm_serve.py` — Serve command and vLLM backend
-- `test_ui.py` — Web UI endpoints, auth, static files
-- `test_infer.py` — Batch inference command
-- `test_bugfixes.py` — Regression fixes (v0.10.1–v0.14.3)
-- `test_performance.py` — Liger Kernel, FlashAttention, FSDP2, Ring Attention, long-context
+| File | Covers |
+|------|--------|
+| test_config.py | Config loading, validation, defaults |
+| test_data.py | Format detection, conversion, validation |
+| test_gpu.py | GPU detection, batch size estimation |
+| test_cli.py | CLI commands, version --full |
+| test_tracker.py | SQLite experiment tracker |
+| test_runs.py | `soup runs` CLI commands |
+| test_data_tools.py | Data convert/merge/dedup/stats commands |
+| test_eval.py | Eval command |
+| test_smoke_train.py | Full pipeline smoke tests (GPU) |
+| test_chat.py | Chat command, `_detect_base_model` |
+| test_push.py | Push command, `_format_size`, `_generate_model_card` |
+| test_init.py | Init command, templates, overwrite logic |
+| test_callback.py | `SoupTrainerCallback` (mock-based) |
+| test_display.py | `TrainingDisplay` rendering |
+| test_loader.py | Data loading (JSONL/JSON/CSV, edge cases) |
+| test_validator.py | `validate_and_stats`, `extended_stats`, `_percentile` |
+| test_formats.py | Reverse conversion, round-trips, edge cases |
+| test_merge.py | Merge command, adapter detection, validation |
+| test_export.py | Export command, GGUF quant types, validation |
+| test_resume.py | Resume checkpoint resolution, W&B flag |
+| test_serve.py | Serve command, FastAPI app, endpoints, streaming |
+| test_generate.py | Data generate, JSON parsing, validation, prompts |
+| test_sweep.py | Sweep params parsing, combinations, nested config |
+| test_diff.py | Diff prompts collection, metrics, CLI |
+| test_deepspeed.py | DeepSpeed configs, multi-GPU detection, trainer integration |
+| test_errors.py | Friendly error messages, --verbose flag, error mapping |
+| test_doctor.py | `soup doctor` command, version checking, dependency table |
+| test_quickstart.py | `soup quickstart` demo, data/config creation, --dry-run |
+| test_grpo.py | GRPO config, rewards, data prep, template, sweep shortcuts |
+| test_progress.py | Rich download progress bar, `_enable_hf_transfer_progress` |
+| test_unsloth.py | Unsloth backend config, detection, trainer integration, templates |
+| test_vision.py | Vision modality config, LLaVA/ShareGPT4V formats, loader, trainer, templates |
+| test_qat.py | QAT config, validation, trainer integration, export compatibility |
+| test_ui.py | Web UI command, FastAPI endpoints, auth, static files, config validation |
+| test_vllm_serve.py | vLLM backend detection, engine creation, serve --backend flag, FastAPI app |
+| test_ppo.py | PPO config, reward model config, data prep, RLHF template, routing, sweep |
+| test_kto.py | KTO config, data format, template, routing, sweep, train guard, wizard |
+| test_orpo.py | ORPO config, template, routing, sweep, train guard, wizard |
+| test_simpo.py | SimPO config, template, routing, sweep, train guard |
+| test_ipo.py | IPO config, template, routing, sweep, train guard |
+| test_advanced_peft.py | DoRA, LoRA+, GaLore config, validation, sweep shortcuts |
+| test_infer.py | Batch inference command, prompt reading, CLI validation |
+| test_tensorboard.py | TensorBoard flag, wandb conflict, report_to routing |
+| test_pretrain.py | Pretrain task, plaintext format, MoE config, templates, routing |
+| test_moe.py | MoE detection, ScatterMoE LoRA targets, MoE info extraction |
+| test_bugfixes.py | v0.10.1-v0.14.3 regression fixes |
+| test_cli_subprocess.py | Subprocess CLI tests: entry point, encoding, paths, platform regressions |
+| test_performance.py | Liger Kernel, FlashAttention, FSDP2, Ring Attention, long-context, RoPE scaling |
+| test_embedding.py | Embedding task config, format, template, routing, sweep, pooling |
+| test_onnx_tensorrt_export.py | ONNX export, TensorRT-LLM export, format support |
+| test_speculative_decoding.py | Speculative decoding CLI, draft model, vLLM integration |
+| test_server_generate.py | Server provider for data generate, SSRF validation |
+| test_quality_filter.py | Perplexity + coherence scoring, `soup data filter` |
+| test_audio.py | Audio modality config, format, template, routing, loader |
+| test_sglang_serve.py | SGLang backend detection, runtime creation, serve --backend |
+| test_deploy_ollama.py | Ollama deploy, Modelfile gen, template mapping, security validation |
+| test_eval_platform.py | Custom eval, judge, human eval (Elo), leaderboard, compare, auto-eval, security |
+| test_synth_data_pro.py | Providers (Ollama, Anthropic, vLLM), templates, quality pipeline, SSRF |
+| test_migrate.py | LLaMA-Factory/Axolotl/Unsloth migration, path traversal, round-trip validation |
+| test_recipes.py | Recipe catalog, search, CLI (list/show/use), path traversal |
+| test_neftune_rslora.py | NEFTune config/validation/sweep, rsLoRA config/validation/sweep |
+| test_profile.py | Training profiler: memory estimation, speed, GPU recommendations, CLI |
+| test_multi_adapter.py | Multi-adapter serving: validation, parsing, FastAPI endpoints, CLI |
+| test_data_sample.py | Data sampling: random/diverse/hard strategies, CLI, edge cases |
+| test_adapters.py | Adapter management: list/info/compare, discovery, metadata |
+| test_awq_gptq_export.py | AWQ/GPTQ export: format support, CLI, quantize mocks, calibration, security |
+| test_packing.py | Sample packing: config, YAML, trainer integration, sweep |
+| test_data_split.py | Data split: ratio/absolute/stratified splits, seed, edge cases |
+| test_curriculum.py | Curriculum learning: config, length sort, buckets, sweep |
+| test_dataset_hub.py | HF dataset search, preview, download, format conversion, security |
+| test_freeze_training.py | Freeze training: config, layer freezing, GPT-2 naming, sweep |
+| test_loss_watchdog.py | Loss watchdog: config, callback behavior, patience, sweep |
+| test_dataset_registry.py | Dataset registry: CRUD, CLI, name validation, error handling |
 
 ## Making Changes
 
@@ -159,8 +226,7 @@ git checkout -b fix/your-bug-fix
 ### 2. Make Your Changes
 
 - Write code following the style guidelines above
-- Add tests for new functionality
-- Update docstrings and comments
+- **Write tests first** (TDD) — then implement to pass them
 - Keep commits focused and logical
 
 ### 3. Run Tests & Lint
@@ -175,16 +241,18 @@ ruff check --fix soup_cli/ tests/
 pytest tests/ -v --tb=short
 ```
 
-If you've added new test files, increase the test count in `plan.md`.
-
 ### 4. Commit
 
-Write clear, descriptive commit messages:
+Write clear, descriptive commit messages following [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```bash
-git add .
-git commit -m "Add feature: descriptive message"
+git add <specific-files>
+git commit -m "feat: add support for X"
+# or
+git commit -m "fix: resolve Y when Z"
 ```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
 
 ### 5. Push & Open a PR
 
@@ -198,40 +266,15 @@ Then open a pull request on GitHub with:
 - Reference any related issues (e.g., "Closes #123")
 - Test results
 
-## Submitting a Pull Request
+## Pull Request Checklist
 
-### PR Template
+When you open a PR, the GitHub template will show this checklist:
 
-Please use the following structure:
-
-```markdown
-## What's this PR about?
-
-Brief description of the change.
-
-## Type of Change
-
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation
-- [ ] Performance improvement
-
-## Testing
-
-Describe how you tested this (e.g., `pytest tests/test_X.py -v`).
-
-## Checklist
-
-- [ ] Linting passes: `ruff check soup_cli/ tests/`
-- [ ] Tests pass: `pytest tests/ -v`
+- [ ] `ruff check soup_cli/ tests/` passes
+- [ ] `pytest tests/ -v` passes
+- [ ] Updated relevant docs (README, CLAUDE.md) if needed
 - [ ] New tests added for new functionality
-- [ ] Docstrings and comments added
-- [ ] No breaking changes (or documented)
-
-## Related Issues
-
-Closes #123 (if applicable)
-```
+- [ ] No breaking changes (or documented in PR description)
 
 ## Architecture & Design Decisions
 
@@ -263,11 +306,11 @@ Multiple formats (Alpaca, ShareGPT, ChatML, LLaVA, ShareGPT4V) are normalized to
 
 ### 1. New Training Task Type
 
-If adding a new training algorithm (e.g., DPO, GRPO):
+If adding a new training algorithm:
 
 1. Create `trainer/your_trainer.py` wrapping the appropriate TRL trainer
 2. Add config fields to `config/schema.py` (Pydantic v2)
-3. Add template to `config/schema.py` (see existing 13 templates)
+3. Add template to `config/schema.py` (see existing 15 templates)
 4. Update `commands/train.py` to route to your trainer
 5. Add 30+ tests in `tests/test_your_trainer.py`
 6. Update `CLAUDE.md`, `README.md`, and `CONTRIBUTING.md`
@@ -286,11 +329,27 @@ If adding a new training algorithm (e.g., DPO, GRPO):
 3. Add tests in `tests/test_your_command.py`
 4. Update help text and README
 
+### 4. New Recipe
+
+1. Add a `RecipeMeta` entry in `recipes/catalog.py`
+2. Add tests in `tests/test_recipes.py`
+3. Update `README.md` recipes section
+
+## Good First Issues
+
+Look for issues labeled [`good first issue`](https://github.com/MakazhanAlpamys/Soup/labels/good%20first%20issue) on GitHub. These are beginner-friendly tasks that help you get familiar with the codebase.
+
+Great areas for first contributions:
+- **New recipes** — add a ready-made config for a popular model (see `recipes/catalog.py`)
+- **Documentation** — improve docstrings, README examples, or example configs
+- **Tests** — increase coverage for existing commands
+- **Bug fixes** — check [open issues](https://github.com/MakazhanAlpamys/Soup/issues) labeled `bug`
+
 ## CI/CD
 
-GitHub Actions runs on every push:
-- **ruff** linting (must pass)
-- **pytest** on Python 3.9, 3.11, 3.12 (must pass)
+GitHub Actions runs on every push and PR:
+- **ruff** linting on Python 3.11 (must pass)
+- **pytest** on Python 3.9, 3.11, 3.12 across Ubuntu, Windows, macOS (must pass)
 
 See `.github/workflows/ci.yml`.
 
@@ -314,13 +373,12 @@ See `CLAUDE.md` for the complete release checklist.
 - **Issues:** Report bugs and request features on [GitHub Issues](https://github.com/MakazhanAlpamys/Soup/issues)
 - **Discussions:** Ask questions on [GitHub Discussions](https://github.com/MakazhanAlpamys/Soup/discussions)
 - **Code of Conduct:** Please read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- **Security:** Report security issues to [SECURITY.md](SECURITY.md)
+- **Security:** Report security issues via [SECURITY.md](SECURITY.md)
 
 ## Questions?
 
 - Check the [README](README.md) for quick start and features
-- Check [CLAUDE.md](CLAUDE.md) for architecture details
+- Check [CLAUDE.md](.claude/CLAUDE.md) for detailed architecture
 - Open a GitHub Discussion for questions
-- Join the community on Reddit ([r/LocalLLaMA](https://www.reddit.com/r/LocalLLaMA/))
 
-Thank you for contributing! 🍲
+Thank you for contributing!
