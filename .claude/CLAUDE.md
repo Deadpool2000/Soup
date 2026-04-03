@@ -1,12 +1,12 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.23.0). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.23.1). Python 3.9+, MIT license.
 
 ## Build & Development
 
 ```bash
 pip install -e ".[dev]"          # Install editable + test deps
-pytest tests/ -v --tb=short      # Run all tests (1970 tests)
+pytest tests/ -v --tb=short      # Run all tests (1979 tests)
 ruff check soup_cli/ tests/      # Lint (must pass before commit)
 ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
@@ -113,7 +113,7 @@ soup_cli/
     profiler.py        # Training memory/speed estimator (GPU lookup, model arch)
     curriculum.py      # Curriculum learning: sort by difficulty, create buckets
     constants.py       # APP_NAME, paths, default chat template
-tests/                 # 70 test files, 1970 tests
+tests/                 # 70 test files, 1979 tests
 examples/
   configs/             # 7 production-ready YAML examples
   data/                # Sample datasets
@@ -350,7 +350,7 @@ soup version           # Show version (--full for details)
 15. **Tag**: `git tag v0.X.Y && git push origin v0.X.Y`
 16. **Release**: `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
 
-## Tests (70 test files, 1970 tests)
+## Tests (70 test files, 1979 tests)
 
 | File | Covers |
 |------|--------|

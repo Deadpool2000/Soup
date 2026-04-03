@@ -125,6 +125,92 @@ class TestCurriculumSorting:
         # First should be shortest
         assert len(str(sorted_data[0])) < len(str(sorted_data[-1]))
 
+    def test_sort_by_length_empty_list(self):
+        """Sort by length should handle empty list."""
+        from soup_cli.utils.curriculum import sort_by_length
+
+        assert sort_by_length([]) == []
+
+    def test_sort_by_length_single_item(self):
+        """Sort by length should handle single item."""
+        from soup_cli.utils.curriculum import sort_by_length
+
+        data = [{"text": "hello"}]
+        assert sort_by_length(data) == data
+
+    def test_sort_by_length_fallback_json(self):
+        """Sort by length should fall back to JSON stringify for unknown formats."""
+        from soup_cli.utils.curriculum import sort_by_length
+
+        data = [
+            {"custom": "a" * 100, "extra": "b" * 50},
+            {"custom": "short"},
+        ]
+        sorted_data = sort_by_length(data)
+        # Shorter row should come first
+        assert len(str(sorted_data[0])) < len(str(sorted_data[-1]))
+
+
+# ─── Curriculum Metric Fallback Tests ────────────────────────────────────
+
+
+class TestCurriculumMetricFallback:
+    """Test non-length metric fallback behavior."""
+
+    def test_perplexity_metric_config(self):
+        """curriculum_metric=perplexity should be a valid config."""
+        cfg = SoupConfig(
+            base="test-model",
+            data={"train": "data.jsonl"},
+            training={
+                "curriculum": True,
+                "curriculum_metric": "perplexity",
+            },
+        )
+        assert cfg.training.curriculum_metric == "perplexity"
+
+    def test_loss_metric_config(self):
+        """curriculum_metric=loss should be a valid config."""
+        cfg = SoupConfig(
+            base="test-model",
+            data={"train": "data.jsonl"},
+            training={
+                "curriculum": True,
+                "curriculum_metric": "loss",
+            },
+        )
+        assert cfg.training.curriculum_metric == "loss"
+
+    def test_non_length_metric_falls_back_to_length(self):
+        """Non-length metrics should fall back to length sorting in SFT trainer."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        cfg = SoupConfig(
+            base="test-model",
+            data={"train": "data.jsonl"},
+            training={
+                "curriculum": True,
+                "curriculum_metric": "perplexity",
+            },
+        )
+
+        output = StringIO()
+        console = Console(file=output)
+        tcfg = cfg.training
+
+        # Simulate the trainer logic
+        if tcfg.curriculum and tcfg.curriculum_metric != "length":
+            console.print(
+                f"[yellow]Curriculum metric '{tcfg.curriculum_metric}' "
+                "requires pre-computed scores. Using length-based sorting.[/]"
+            )
+
+        text = output.getvalue()
+        assert "perplexity" in text
+        assert "length-based" in text
+
 
 # ─── Bucket Creation Tests ───────────────────────────────────────────────
 

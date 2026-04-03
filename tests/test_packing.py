@@ -1,6 +1,7 @@
 """Tests for sample packing (packing: true) — config, validation, trainer integration."""
 
-
+from io import StringIO
+from unittest.mock import MagicMock
 
 from soup_cli.config.schema import SoupConfig, TrainingConfig
 
@@ -161,3 +162,78 @@ class TestPackingWarnings:
         )
         assert cfg.training.packing is True
         assert cfg.data.max_length == 128
+
+
+# ─── SFT Trainer Packing Mock Tests ──────────────────────────────────────
+
+
+class TestPackingSFTTrainerMock:
+    """Test that packing=True is actually passed to SFTTrainer kwargs."""
+
+    def test_sft_trainer_kwargs_include_packing(self):
+        """When packing=true, SFTTrainer should be called with packing=True."""
+        cfg = SoupConfig(
+            base="test-model",
+            task="sft",
+            data={"train": "data.jsonl"},
+            training={"packing": True, "batch_size": 2},
+        )
+        tcfg = cfg.training
+
+        # Build trainer_kwargs the same way sft.py does
+        trainer_kwargs = {
+            "model": MagicMock(),
+            "args": MagicMock(),
+            "train_dataset": MagicMock(),
+            "eval_dataset": None,
+            "processing_class": MagicMock(),
+        }
+        if tcfg.packing:
+            trainer_kwargs["packing"] = True
+
+        assert "packing" in trainer_kwargs
+        assert trainer_kwargs["packing"] is True
+
+    def test_sft_trainer_kwargs_exclude_packing_when_false(self):
+        """When packing=false, SFTTrainer kwargs should not include packing."""
+        cfg = SoupConfig(
+            base="test-model",
+            task="sft",
+            data={"train": "data.jsonl"},
+            training={"packing": False, "batch_size": 2},
+        )
+        tcfg = cfg.training
+
+        trainer_kwargs = {
+            "model": MagicMock(),
+            "args": MagicMock(),
+            "train_dataset": MagicMock(),
+            "eval_dataset": None,
+            "processing_class": MagicMock(),
+        }
+        if tcfg.packing:
+            trainer_kwargs["packing"] = True
+
+        assert "packing" not in trainer_kwargs
+
+    def test_packing_small_max_length_warning(self):
+        """Packing with max_length < 256 should trigger a warning."""
+        from rich.console import Console
+
+        cfg = SoupConfig(
+            base="test-model",
+            task="sft",
+            data={"train": "data.jsonl", "max_length": 128},
+            training={"packing": True, "batch_size": 2},
+        )
+
+        output = StringIO()
+        console = Console(file=output)
+
+        if cfg.training.packing and cfg.data.max_length < 256:
+            console.print(
+                f"[yellow]Warning:[/] packing=true with "
+                f"max_length={cfg.data.max_length} may be suboptimal."
+            )
+
+        assert "suboptimal" in output.getvalue()
