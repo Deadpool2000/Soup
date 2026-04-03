@@ -1,6 +1,6 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.24.0). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.24.1). Python 3.9+, MIT license.
 
 ## Build & Development
 
@@ -294,6 +294,8 @@ soup version           # Show version (--full for details)
 - **Dataset registry**: JSON validation on load — catches corruption + type mismatch (v0.24.0)
 - **Loss watchdog**: threshold bounded le=100.0, patience bounded le=1000 (v0.24.0)
 - **Freeze training**: freeze_layers bounded le=1000 (v0.24.0)
+- **AWQ/GPTQ export**: output path traversal validation before import check (v0.24.1)
+- **Windows Unicode**: Rich console symbols replaced with ASCII equivalents (v0.24.1)
 
 ## Code Conventions
 
@@ -367,7 +369,7 @@ soup version           # Show version (--full for details)
 15. **Tag**: `git tag v0.X.Y && git push origin v0.X.Y`
 16. **Release**: `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
 
-## Tests (74 test files, 2061 tests)
+## Tests (74 test files, 2065 tests)
 
 | File | Covers |
 |------|--------|
@@ -436,7 +438,7 @@ soup version           # Show version (--full for details)
 | test_multi_adapter.py | Multi-adapter serving: validation, parsing, FastAPI endpoints, CLI |
 | test_data_sample.py | Data sampling: random/diverse/hard strategies, CLI, edge cases |
 | test_adapters.py | Adapter management: list/info/compare, discovery, metadata |
-| test_awq_gptq_export.py | AWQ/GPTQ export: format support, CLI, quantize mocks, calibration, security |
+| test_awq_gptq_export.py | AWQ/GPTQ export: format support, CLI, quantize mocks, calibration, output path traversal, security |
 | test_packing.py | Sample packing: config, YAML, trainer integration, sweep |
 | test_data_split.py | Data split: ratio/absolute/stratified splits, seed, edge cases |
 | test_curriculum.py | Curriculum learning: config, length sort, buckets, sweep |

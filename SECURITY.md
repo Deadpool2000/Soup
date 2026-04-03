@@ -9,9 +9,9 @@ We provide security updates for the following versions:
 - **Versions older than 3 minor versions:** No support
 
 Example:
-- v0.24.0-0.24.x → Full support (latest)
-- v0.23.0-0.23.x → Bug-fix support only
-- v0.22.x and below → No support
+- v0.24.0-0.24.x -- Full support (latest)
+- v0.23.0-0.23.x -- Bug-fix support only
+- v0.22.x and below -- No support
 
 ## Reporting a Vulnerability
 
@@ -124,6 +124,10 @@ No known critical vulnerabilities in current releases.
 - **v0.19.0**: Custom eval JSONL schema validation + 10k task cap, regex scoring ReDoS guard, judge API SSRF protection + API key isolation, human eval local-only terminal UI + 10k prompt cap, leaderboard read-only SQLite queries
 - **v0.20.0**: Ollama provider localhost-only validation (remote blocked), Anthropic provider API key from env only (never CLI arg), vLLM provider SSRF protection (scheme whitelist + localhost-only HTTP), output path traversal protection (`..` blocked), configurable rate limiting (`--requests-per-minute`)
 - **v0.21.0**: Migrate input/output path traversal protection (resolve + relative_to(cwd)), Unsloth .ipynb AST-only parsing (no exec/eval), recipes output path traversal protection, NEFTune config bounded (ge=0.0, le=50.0)
+- **v0.22.0**: Multi-adapter serving path traversal protection (resolve + relative_to(cwd)), adapter name validation (alphanumeric + hyphens only), unknown adapter returns 404 (not 500)
+- **v0.23.0**: AWQ/GPTQ calibration data path traversal protection (resolve + relative_to(cwd)), AWQ/GPTQ output path stays under cwd, curriculum_buckets bounded (ge=1, le=20), AWQ/GPTQ trust_remote_code warning panel
+- **v0.24.0**: HF download trust_remote_code=False + warning panel, HF download output path sanitized (Path.name), download --samples capped at 1M, dataset registry name validation (no path separators/null bytes), registry path traversal protection, loss_watchdog threshold le=100 + patience le=1000, freeze_layers le=1000
+- **v0.24.1**: AWQ/GPTQ output path traversal validation moved before import check (previously unreachable when autoawq/auto-gptq not installed), Windows Unicode fix for Rich console output (replaced non-ASCII symbols with ASCII equivalents)
 
 ## Security Scanning
 

@@ -151,7 +151,7 @@ def _render_profile(result: dict, cfg, gpu_memory_gb: float) -> None:
         f"~{result['activation_memory_gb']:.1f} GB",
     )
     mem_table.add_row("Overhead", f"~{result['overhead_gb']:.1f} GB")
-    mem_table.add_row("─" * 20, "─" * 10)
+    mem_table.add_row("-" * 20, "-" * 10)
     mem_table.add_row("[bold]Total[/]", f"[bold]~{result['total_memory_gb']:.1f} GB[/]")
 
     # Speed info
@@ -165,26 +165,26 @@ def _render_profile(result: dict, cfg, gpu_memory_gb: float) -> None:
     fits = result["total_memory_gb"] <= gpu_memory_gb
     if fits:
         recs.append(
-            f"[green]✓[/] Fits in {gpu_memory_gb:.0f} GB VRAM"
+            f"[green]OK[/] Fits in {gpu_memory_gb:.0f} GB VRAM"
         )
     else:
         recs.append(
-            f"[red]✗[/] Does NOT fit in {gpu_memory_gb:.0f} GB VRAM "
+            f"[red]X[/] Does NOT fit in {gpu_memory_gb:.0f} GB VRAM "
             f"(need ~{result['total_memory_gb']:.0f} GB)"
         )
 
     recs.append(
-        f"[green]✓[/] Recommended batch_size: {result['recommended_batch_size']}"
+        f"[green]OK[/] Recommended batch_size: {result['recommended_batch_size']}"
     )
 
     if result["total_memory_gb"] > 24 and not result["gradient_checkpointing"]:
         recs.append(
-            "[yellow]⚠[/] Consider gradient_checkpointing: true for memory savings"
+            "[yellow]![/] Consider gradient_checkpointing: true for memory savings"
         )
 
     if result["total_memory_gb"] > 40:
         recs.append(
-            "[yellow]⚠[/] Consider DeepSpeed ZeRO-3 or FSDP for distributed training"
+            "[yellow]![/] Consider DeepSpeed ZeRO-3 or FSDP for distributed training"
         )
 
     # Compatible GPUs (show top 5)
@@ -203,4 +203,4 @@ def _render_profile(result: dict, cfg, gpu_memory_gb: float) -> None:
     if gpu_list:
         console.print("[bold]Compatible GPUs:[/]")
         for gpu_name in gpu_list:
-            console.print(f"  • {gpu_name}")
+            console.print(f"  - {gpu_name}")

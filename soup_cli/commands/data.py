@@ -844,18 +844,18 @@ def split_data(
 
     output_msg = (
         f"[green]Split {total} rows:[/]\n"
-        f"  Train: {len(train_data)} → [bold]{train_path}[/]"
+        f"  Train: {len(train_data)} -> [bold]{train_path}[/]"
     )
 
     if val_data:
         val_path = parent / f"{stem}_val.jsonl"
         _write_jsonl(val_path, val_data)
-        output_msg += f"\n  Val:   {len(val_data)} → [bold]{val_path}[/]"
+        output_msg += f"\n  Val:   {len(val_data)} -> [bold]{val_path}[/]"
 
     if test_data:
         test_path = parent / f"{stem}_test.jsonl"
         _write_jsonl(test_path, test_data)
-        output_msg += f"\n  Test:  {len(test_data)} → [bold]{test_path}[/]"
+        output_msg += f"\n  Test:  {len(test_data)} -> [bold]{test_path}[/]"
 
     console.print(output_msg)
 

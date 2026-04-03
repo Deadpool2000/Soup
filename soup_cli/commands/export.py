@@ -602,6 +602,20 @@ def _export_tensorrt(model_path: Path, output: Optional[str], base: Optional[str
     )
 
 
+def _validate_output_path(output: Optional[str]) -> Optional[Path]:
+    """Validate output path stays under cwd (path traversal protection)."""
+    if output is None:
+        return None
+    out_path = Path(output).resolve()
+    cwd = Path.cwd().resolve()
+    try:
+        out_path.relative_to(cwd)
+    except ValueError:
+        console.print("[red]Output path must be under the current working directory.[/]")
+        raise typer.Exit(1)
+    return out_path
+
+
 def _validate_calibration_path(calibration_data: Optional[str]) -> Optional[Path]:
     """Validate calibration data path stays under cwd."""
     if calibration_data is None:
@@ -661,6 +675,9 @@ def _export_awq(
         )
         raise typer.Exit(1)
 
+    # Validate output path (security: path traversal protection)
+    validated_output = _validate_output_path(output)
+
     # Validate calibration path (security: path traversal protection)
     cal_path = _validate_calibration_path(calibration_data)
 
@@ -695,7 +712,8 @@ def _export_awq(
         _merge_adapter(str(model_path), base_model, str(merge_dir))
         source_path = merge_dir
 
-    output_path = Path(output) if output else model_path.parent / f"{model_path.name}_awq"
+    default_out = model_path.parent / f"{model_path.name}_awq"
+    output_path = validated_output if validated_output else default_out
 
     console.print(
         Panel(
@@ -776,6 +794,9 @@ def _export_gptq(
         )
         raise typer.Exit(1)
 
+    # Validate output path (security: path traversal protection)
+    validated_output = _validate_output_path(output)
+
     # Validate calibration path (security: path traversal protection)
     cal_path = _validate_calibration_path(calibration_data)
 
@@ -810,7 +831,8 @@ def _export_gptq(
         _merge_adapter(str(model_path), base_model, str(merge_dir))
         source_path = merge_dir
 
-    output_path = Path(output) if output else model_path.parent / f"{model_path.name}_gptq"
+    default_out = model_path.parent / f"{model_path.name}_gptq"
+    output_path = validated_output if validated_output else default_out
 
     console.print(
         Panel(
@@ -908,12 +930,15 @@ def _auto_deploy_ollama(
     version = detect_ollama()
     if not version:
         console.print(
-            "[red]Ollama not found — skipping deploy.[/]\n"
+            "[red]Ollama not found -- skipping deploy.[/]\n"
             "Install from: [bold]https://ollama.com[/]"
         )
         raise typer.Exit(1)
 
-    console.print(f"\n[green]✓[/] Ollama v{version} detected — deploying as [bold]{ollama_name}[/]")
+    console.print(
+        f"\n[green]OK[/] Ollama v{version} detected"
+        f" -- deploying as [bold]{ollama_name}[/]"
+    )
     console.print(
         "[yellow]Warning:[/] This will overwrite any existing Ollama model "
         f"named '{ollama_name}'."
@@ -929,7 +954,7 @@ def _auto_deploy_ollama(
         console.print(f"[red]Deploy failed:[/] {message}")
         raise typer.Exit(1)
 
-    console.print(f"[green]✓[/] Deployed to Ollama: [bold]{ollama_name}[/]")
+    console.print(f"[green]OK[/] Deployed to Ollama: [bold]{ollama_name}[/]")
     console.print(f"Run: [bold]ollama run {ollama_name}[/]")
 
 

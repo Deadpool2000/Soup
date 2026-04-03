@@ -108,7 +108,7 @@ def migrate(
     ))
 
     if dry_run:
-        console.print("[dim]Dry run — no file written.[/]")
+        console.print("[dim]Dry run -- no file written.[/]")
         return
 
     # Check for existing file

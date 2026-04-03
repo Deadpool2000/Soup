@@ -281,7 +281,7 @@ def _fmt_loss(run: dict) -> str:
 
 
 def _fmt_float(val: Optional[float]) -> str:
-    """Format a float or return '—'."""
+    """Format a float or return '-'."""
     if val is not None:
         return f"{val:.4f}"
     return "-"

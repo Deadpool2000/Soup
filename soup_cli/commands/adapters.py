@@ -143,7 +143,7 @@ def info(
         f"Size on disk: [bold]{size}[/]"
     )
 
-    console.print(Panel(info_text, title=f"Adapter Info — {adapter_path.name}"))
+    console.print(Panel(info_text, title=f"Adapter Info -- {adapter_path.name}"))
 
 
 @app.command()

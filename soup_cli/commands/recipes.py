@@ -47,7 +47,7 @@ def show(
 
     console.print(Panel(
         Syntax(recipe.yaml_str, "yaml", theme="monokai"),
-        title=f"[bold green]{name}[/] — {recipe.description}",
+        title=f"[bold green]{name}[/] -- {recipe.description}",
     ))
 
 

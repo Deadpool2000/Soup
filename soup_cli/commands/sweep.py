@@ -145,7 +145,7 @@ def sweep(
                 if final_loss > best_loss * early_stop:
                     console.print(
                         f"[yellow]Loss {final_loss:.4f} exceeds threshold "
-                        f"({best_loss:.4f} × {early_stop} = {best_loss * early_stop:.4f})[/]"
+                        f"({best_loss:.4f} x {early_stop} = {best_loss * early_stop:.4f})[/]"
                     )
         except Exception as exc:
             console.print(f"[red]Run {run_name} failed: {exc}[/]")

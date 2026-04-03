@@ -142,18 +142,23 @@ class TestAwqExportFunction:
 
         import soup_cli.commands.export as export_mod
 
+        out_path = tmp_path / "out"
         with mock_patch.object(builtins, "__import__", side_effect=_mock_import(awq_mock=awq_mod)):
             with mock_patch(
                 "transformers.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ):
-                export_mod._export_awq(
-                    model_dir, str(tmp_path / "out"), None,
-                    bits=4, group_size=128, calibration_data=None,
-                )
-                mock_awq_class.from_pretrained.assert_called_once()
-                mock_model.quantize.assert_called_once()
-                mock_model.save_quantized.assert_called_once()
+                with mock_patch(
+                    "soup_cli.commands.export._validate_output_path",
+                    return_value=out_path,
+                ):
+                    export_mod._export_awq(
+                        model_dir, str(out_path), None,
+                        bits=4, group_size=128, calibration_data=None,
+                    )
+                    mock_awq_class.from_pretrained.assert_called_once()
+                    mock_model.quantize.assert_called_once()
+                    mock_model.save_quantized.assert_called_once()
 
     def test_export_awq_default_output_path(self, tmp_path):
         """Default AWQ output path should be model_name + _awq suffix."""
@@ -204,6 +209,7 @@ class TestAwqExportFunction:
 
         import soup_cli.commands.export as export_mod
 
+        out_path = tmp_path / "out"
         with mock_patch.object(builtins, "__import__", side_effect=_mock_import(awq_mock=awq_mod)):
             with mock_patch(
                 "transformers.AutoTokenizer.from_pretrained",
@@ -213,13 +219,18 @@ class TestAwqExportFunction:
                     "soup_cli.commands.export._validate_calibration_path",
                     return_value=cal_file,
                 ):
-                    export_mod._export_awq(
-                        model_dir, str(tmp_path / "out"), None,
-                        bits=4, group_size=128, calibration_data=str(cal_file),
-                    )
-                    quant_call = mock_model.quantize.call_args
-                    assert quant_call is not None
-                    assert "calib_data" in quant_call.kwargs
+                    with mock_patch(
+                        "soup_cli.commands.export._validate_output_path",
+                        return_value=out_path,
+                    ):
+                        export_mod._export_awq(
+                            model_dir, str(out_path), None,
+                            bits=4, group_size=128,
+                            calibration_data=str(cal_file),
+                        )
+                        quant_call = mock_model.quantize.call_args
+                        assert quant_call is not None
+                        assert "calib_data" in quant_call.kwargs
 
     def test_export_awq_invalid_bits(self, tmp_path):
         """Invalid bits value should raise ClickExit."""
@@ -286,6 +297,7 @@ class TestGptqExportFunction:
 
         import soup_cli.commands.export as export_mod
 
+        out_path = tmp_path / "out"
         with mock_patch.object(
             builtins, "__import__", side_effect=_mock_import(gptq_mock=gptq_mod)
         ):
@@ -293,13 +305,17 @@ class TestGptqExportFunction:
                 "transformers.AutoTokenizer.from_pretrained",
                 return_value=mock_tokenizer,
             ):
-                export_mod._export_gptq(
-                    model_dir, str(tmp_path / "out"), None,
-                    bits=4, group_size=128, calibration_data=None,
-                )
-                mock_gptq_class.from_pretrained.assert_called_once()
-                mock_model.quantize.assert_called_once()
-                mock_model.save_quantized.assert_called_once()
+                with mock_patch(
+                    "soup_cli.commands.export._validate_output_path",
+                    return_value=out_path,
+                ):
+                    export_mod._export_gptq(
+                        model_dir, str(out_path), None,
+                        bits=4, group_size=128, calibration_data=None,
+                    )
+                    mock_gptq_class.from_pretrained.assert_called_once()
+                    mock_model.quantize.assert_called_once()
+                    mock_model.save_quantized.assert_called_once()
 
     def test_export_gptq_default_output_path(self, tmp_path):
         """Default GPTQ output path should be model_name + _gptq suffix."""
@@ -550,6 +566,41 @@ class TestCalibrationPathValidation:
 
         with pytest.raises(ClickExit):
             _validate_calibration_path("C:/Windows/System32/drivers/etc/hosts")
+
+
+# ─── Output Path Validation Tests ────────────────────────────────────────
+
+
+class TestOutputPathValidation:
+    """Test _validate_output_path function."""
+
+    def test_none_returns_none(self):
+        from soup_cli.commands.export import _validate_output_path
+
+        assert _validate_output_path(None) is None
+
+    def test_valid_path_returns_path(self):
+        """Valid path under cwd should return resolved Path."""
+        from soup_cli.commands.export import _validate_output_path
+
+        out = Path.cwd() / "test_output_xyzzy"
+        result = _validate_output_path(str(out))
+        assert result is not None
+        assert result.name == "test_output_xyzzy"
+
+    def test_path_outside_cwd_raises(self):
+        """Path outside cwd should raise ClickExit."""
+        from soup_cli.commands.export import _validate_output_path
+
+        with pytest.raises(ClickExit):
+            _validate_output_path("C:/Windows/System32/evil_output")
+
+    def test_path_traversal_rejected(self):
+        """Relative path traversal should be rejected."""
+        from soup_cli.commands.export import _validate_output_path
+
+        with pytest.raises(ClickExit):
+            _validate_output_path("../../../tmp/evil")
 
 
 # ─── Optional Dependency Tests ────────────────────────────────────────────

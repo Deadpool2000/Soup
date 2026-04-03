@@ -304,7 +304,7 @@ def recommend_gpu(total_memory_gb: float) -> list[str]:
 
     if not compatible:
         compatible.append(
-            f"No single GPU fits {total_memory_gb:.1f} GB — use multi-GPU (DeepSpeed/FSDP)"
+            f"No single GPU fits {total_memory_gb:.1f} GB -- use multi-GPU (DeepSpeed/FSDP)"
         )
 
     return compatible
