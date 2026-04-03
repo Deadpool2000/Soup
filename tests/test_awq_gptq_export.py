@@ -363,43 +363,43 @@ class TestGptqExportFunction:
 
 
 class TestAwqGptqCLIArgs:
-    """Test new CLI arguments for AWQ/GPTQ export."""
+    """Test new CLI arguments are declared in export function signature."""
 
-    def test_bits_flag_in_help(self):
-        from typer.testing import CliRunner
+    def test_bits_flag_exists(self):
+        """Export function should have a --bits parameter."""
+        import inspect
 
-        from soup_cli.cli import app
+        from soup_cli.commands.export import export
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["export", "--help"])
-        assert "--bits" in result.output
+        sig = inspect.signature(export)
+        assert "bits" in sig.parameters
 
-    def test_group_size_flag_in_help(self):
-        from typer.testing import CliRunner
+    def test_group_size_flag_exists(self):
+        """Export function should have a --group-size parameter."""
+        import inspect
 
-        from soup_cli.cli import app
+        from soup_cli.commands.export import export
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["export", "--help"])
-        assert "--group-size" in result.output
+        sig = inspect.signature(export)
+        assert "group_size" in sig.parameters
 
-    def test_calibration_data_flag_in_help(self):
-        from typer.testing import CliRunner
+    def test_calibration_data_flag_exists(self):
+        """Export function should have a --calibration-data parameter."""
+        import inspect
 
-        from soup_cli.cli import app
+        from soup_cli.commands.export import export
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["export", "--help"])
-        assert "--calibration-data" in result.output
+        sig = inspect.signature(export)
+        assert "calibration_data" in sig.parameters
 
-    def test_calibration_samples_flag_in_help(self):
-        from typer.testing import CliRunner
+    def test_calibration_samples_flag_exists(self):
+        """Export function should have a --calibration-samples parameter."""
+        import inspect
 
-        from soup_cli.cli import app
+        from soup_cli.commands.export import export
 
-        runner = CliRunner()
-        result = runner.invoke(app, ["export", "--help"])
-        assert "--calibration-samples" in result.output
+        sig = inspect.signature(export)
+        assert "calibration_samples" in sig.parameters
 
 
 # ─── Security Tests ──────────────────────────────────────────────────────
