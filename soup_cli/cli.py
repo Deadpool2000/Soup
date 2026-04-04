@@ -92,19 +92,19 @@ data.app.command(name="generate")(generate.generate)
 @app.command()
 def version(
     full: bool = typer.Option(False, "--full", "-f", help="Show system info and extras"),
-    is_json: bool = typer.Option(False, "--json", help="Output in JSON format"),
+    json_output: bool = typer.Option(False, "--json", help="Output in JSON format"),
 ):
     """Show Soup CLI version."""
     import json
     import platform
 
-    if is_json:
+    if json_output:
         info = {
             "version": __version__,
             "python": platform.python_version(),
             "platform": platform.system().lower(),
         }
-        
+
         if full:
             for lib in ["torch", "transformers", "peft", "trl", "datasets", "accelerate"]:
                 try:
@@ -124,8 +124,8 @@ def version(
                         info[name] = "installed"
                 except ImportError:
                     pass
-                    
-        print(json.dumps(info))
+
+        console.print(json.dumps(info), highlight=False)
         return
 
     if not full:
