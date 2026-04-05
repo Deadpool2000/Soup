@@ -316,7 +316,7 @@ def clean(
             continue
 
         metrics = tracker.get_metrics(run["run_id"])
-        
+
         best_step = -1
         valid_metrics = [m for m in metrics if m.get("loss") is not None]
         if valid_metrics:
@@ -356,7 +356,7 @@ def clean(
         raise typer.Exit()
 
     gb_to_reclaim = total_bytes_to_reclaim / (1024 ** 3)
-    
+
     if dry_run:
         console.print(f"[bold]Dry Run:[/] Would reclaim [green]{gb_to_reclaim:.2f} GB[/] "
                       f"from {len(files_to_delete)} files and {len(dirs_to_delete)} directories.")
