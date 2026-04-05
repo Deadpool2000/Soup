@@ -205,8 +205,9 @@ def _check_resources():
         elif platform.system() == "Darwin":
             try:
                 import subprocess
-                res = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=True)
-                ram_str = f"{int(res.stdout.strip()) / (1024 ** 3):.0f} GB"
+                res = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True)
+                if res.returncode == 0:
+                    ram_str = f"{int(res.stdout.strip()) / (1024 ** 3):.0f} GB"
             except Exception:
                 pass
         elif platform.system() == "Windows":
