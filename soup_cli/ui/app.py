@@ -347,11 +347,14 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
         from fastapi.responses import StreamingResponse
 
         last_event_id = request.headers.get("Last-Event-ID")
-        skip_count = int(last_event_id) + 1 if last_event_id else 0
+        skip_count = 0
+        if last_event_id and last_event_id.isdigit():
+            skip_count = int(last_event_id) + 1
 
         def _generate_log_events():
             line_index = 0
-            proc = _train_process
+            with _train_lock:
+                proc = _train_process
             if proc is None:
                 yield "event: done\ndata: {}\n\n"
                 return
@@ -392,7 +395,8 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
         def _generate_metrics_events():
             from soup_cli.experiment.tracker import ExperimentTracker
 
-            proc = _train_process
+            with _train_lock:
+                proc = _train_process
             if proc is None and run_id is None:
                 yield "event: done\ndata: {}\n\n"
                 return
@@ -427,7 +431,8 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
                     polls_since_new += 1
 
                 # Check if training is still running
-                proc = _train_process
+                with _train_lock:
+                    proc = _train_process
                 if proc is None or proc.poll() is not None:
                     if polls_since_new >= 1:
                         yield "event: done\ndata: {}\n\n"
@@ -514,13 +519,13 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
                         info["type"] = "boolean"
 
                     # Check for Literal (enum) types
-                    origin = getattr(annotation, "__origin__", None)
-                    if origin is type(None):
-                        pass
                     args = getattr(annotation, "__args__", None)
-                    if args and all(isinstance(a, str) for a in args):
-                        info["type"] = "enum"
-                        info["options"] = list(args)
+                    if args:
+                        # Filter out NoneType for Optional[Literal[...]]
+                        non_none = [a for a in args if a is not type(None)]
+                        if non_none and all(isinstance(a, str) for a in non_none):
+                            info["type"] = "enum"
+                            info["options"] = list(non_none)
 
                 # Get constraints from metadata
                 for meta in (field_info.metadata or []):
@@ -575,14 +580,20 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
             # Validate
             load_config_from_string(yaml_str)
             return {"yaml": yaml_str}
-        except Exception as exc:
-            return {"error": str(exc)}
+        except (ValueError, TypeError) as exc:
+            logger.warning("Config form validation error: %s", exc)
+            return {"error": "Invalid configuration"}
 
     # --- Chat Proxy ---
 
+    class ChatMessage(PydanticBaseModel):
+        """A single chat message."""
+        role: str
+        content: str
+
     class ChatRequest(PydanticBaseModel):
         """Request body for chat send."""
-        messages: list
+        messages: list[ChatMessage]
         endpoint: str
         temperature: float = Field(default=0.7, ge=0.0, le=2.0)
         max_tokens: int = Field(default=512, ge=1, le=16384)
@@ -634,7 +645,7 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
 
             url = req.endpoint.rstrip("/") + "/v1/chat/completions"
             payload = {
-                "messages": req.messages,
+                "messages": [m.model_dump() for m in req.messages],
                 "max_tokens": req.max_tokens,
                 "temperature": req.temperature,
                 "top_p": req.top_p,
