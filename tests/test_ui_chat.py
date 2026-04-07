@@ -186,6 +186,47 @@ class TestChatInvalidScheme:
         )
         assert response.status_code == 400
 
+    def test_rejects_ipv6_mapped_loopback_alias(self):
+        """Chat endpoint should reject IPv6-mapped private addresses."""
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            pytest.skip("FastAPI not installed")
+
+        from soup_cli.ui.app import create_app
+
+        client = TestClient(create_app())
+        response = client.post(
+            "/api/chat/send",
+            json={
+                "messages": [{"role": "user", "content": "hi"}],
+                "endpoint": "http://192.168.1.1:8000",
+            },
+            headers=_auth_headers(),
+        )
+        assert response.status_code == 400
+
+    def test_allows_127_loopback_range(self):
+        """Chat endpoint should allow 127.x.x.x loopback addresses."""
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            pytest.skip("FastAPI not installed")
+
+        from soup_cli.ui.app import create_app
+
+        client = TestClient(create_app())
+        response = client.post(
+            "/api/chat/send",
+            json={
+                "messages": [{"role": "user", "content": "hi"}],
+                "endpoint": "http://127.0.0.2:8000",
+            },
+            headers=_auth_headers(),
+        )
+        # 127.0.0.2 is loopback — should NOT be rejected as SSRF
+        assert response.status_code != 400
+
     def test_rejects_file_scheme(self):
         """Chat endpoint should reject file:// URLs."""
         try:

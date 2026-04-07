@@ -614,8 +614,17 @@ def create_app(host: str = "127.0.0.1", port: int = 7860):
         # SSRF protection: localhost-only HTTP, HTTPS for remote
         parsed = urlparse(req.endpoint)
         if parsed.scheme == "http":
+            import ipaddress as _ipaddr
+
             host = parsed.hostname or ""
-            if host not in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+            is_local = host in ("localhost", "0.0.0.0")
+            if not is_local:
+                try:
+                    addr = _ipaddr.ip_address(host)
+                    is_local = addr.is_loopback
+                except ValueError:
+                    is_local = False
+            if not is_local:
                 raise HTTPException(
                     status_code=400,
                     detail="HTTP only allowed for localhost endpoints",
