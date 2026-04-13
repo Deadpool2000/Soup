@@ -589,8 +589,8 @@ class TestLongContextTemplate:
         assert "use_flash_attn" in TEMPLATES["longcontext"]
 
     def test_longcontext_template_count(self):
-        """Should now have 15 templates (14 + audio)."""
-        assert len(TEMPLATES) == 15
+        """Should now have 16 templates (15 + tool-calling added in v0.25.0)."""
+        assert len(TEMPLATES) == 16
 
 
 # ─── Trainer fsdp_config Parameter Tests ─────────────────────────────────

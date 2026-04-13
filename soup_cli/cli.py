@@ -8,6 +8,7 @@ from rich.console import Console
 from soup_cli import __version__
 from soup_cli.commands import (
     adapters,
+    autopilot,
     chat,
     data,
     deploy,
@@ -84,6 +85,7 @@ app.command()(profile.profile)
 app.command()(doctor_cmd.doctor)
 app.command()(quickstart_cmd.quickstart)
 app.command()(ui.ui)
+app.command(name="autopilot")(autopilot.autopilot_cmd)
 
 # Register data generate as a subcommand of data
 data.app.command(name="generate")(generate.generate)

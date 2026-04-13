@@ -211,3 +211,83 @@ class TestRecipesCLI:
         result = runner.invoke(app, ["recipes", "--help"])
         assert result.exit_code == 0
         assert "recipes" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Part A: v0.25.0 new model recipes (Llama 4, Qwen 3, Gemma 3, DeepSeek V3)
+# ---------------------------------------------------------------------------
+
+class TestV025NewRecipes:
+    """Tests for the 9 new recipes added in v0.25.0."""
+
+    EXPECTED = [
+        ("llama4-scout-17b-sft", "sft", "meta-llama/Llama-4-Scout-17B-16E-Instruct"),
+        ("llama4-scout-17b-dpo", "dpo", "meta-llama/Llama-4-Scout-17B-16E-Instruct"),
+        ("llama4-scout-17b-grpo", "grpo", "meta-llama/Llama-4-Scout-17B-16E-Instruct"),
+        ("qwen3-14b-sft", "sft", "Qwen/Qwen3-14B"),
+        ("qwen3-32b-sft", "sft", "Qwen/Qwen3-32B"),
+        ("qwen3-8b-grpo", "grpo", "Qwen/Qwen3-8B"),
+        ("gemma3-12b-sft", "sft", "google/gemma-3-12b-it"),
+        ("gemma3-27b-dpo", "dpo", "google/gemma-3-27b-it"),
+        ("deepseek-v3-7b-sft", "sft", "deepseek-ai/DeepSeek-V3-0324"),
+    ]
+
+    def test_all_new_recipes_registered(self):
+        """All 9 new recipes are in the catalog."""
+        from soup_cli.recipes.catalog import RECIPES
+
+        for name, _task, _model in self.EXPECTED:
+            assert name in RECIPES, f"Missing recipe: {name}"
+
+    def test_new_recipes_have_correct_task_and_model(self):
+        """Each new recipe has the expected task and model."""
+        from soup_cli.recipes.catalog import get_recipe
+
+        for name, task, model in self.EXPECTED:
+            recipe = get_recipe(name)
+            assert recipe is not None
+            assert recipe.task == task
+            assert recipe.model == model
+
+    def test_new_recipes_load_as_soupconfig(self):
+        """All new recipes produce a valid SoupConfig."""
+        from soup_cli.config.loader import load_config_from_string
+        from soup_cli.recipes.catalog import get_recipe
+
+        for name, _task, _model in self.EXPECTED:
+            recipe = get_recipe(name)
+            cfg = load_config_from_string(recipe.yaml_str)
+            assert cfg.base == recipe.model
+            assert cfg.task == recipe.task
+
+    def test_catalog_size_is_43(self):
+        """Total catalog size is 43 (29 + 9 Part A + 2 Part B tools + 3 Part E MLX).
+
+        v0.25.0 ships MLX SFT recipes only; DPO/GRPO on MLX are scaffolding and
+        the dpo/grpo-mlx recipes were removed along with the backend validator
+        that rejects non-SFT MLX configs at load time.
+        """
+        from soup_cli.recipes.catalog import RECIPES
+
+        assert len(RECIPES) == 43
+
+    def test_new_recipes_searchable(self):
+        """Search returns the new recipes via keyword/task filter."""
+        from soup_cli.recipes.catalog import search_recipes
+
+        llama4_results = search_recipes(query="Llama-4")
+        llama4_names = {r.model for r in llama4_results}
+        assert "meta-llama/Llama-4-Scout-17B-16E-Instruct" in llama4_names
+
+        qwen3_sft = search_recipes(query="qwen3", task="sft")
+        assert any("Qwen/Qwen3-14B" == r.model for r in qwen3_sft)
+        assert any("Qwen/Qwen3-32B" == r.model for r in qwen3_sft)
+
+    def test_deepseek_v3_uses_moe_lora(self):
+        """deepseek-v3-7b-sft recipe enables moe_lora."""
+        from soup_cli.config.loader import load_config_from_string
+        from soup_cli.recipes.catalog import get_recipe
+
+        recipe = get_recipe("deepseek-v3-7b-sft")
+        cfg = load_config_from_string(recipe.yaml_str)
+        assert cfg.training.moe_lora is True

@@ -1,12 +1,12 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.24.3). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.25.0). Python 3.9+, MIT license.
 
 ## Build & Development
 
 ```bash
 pip install -e ".[dev]"          # Install editable + test deps
-pytest tests/ -v --tb=short      # Run all tests (2130 tests)
+pytest tests/ -v --tb=short      # Run all tests (2313 tests)
 ruff check soup_cli/ tests/      # Lint (must pass before commit)
 ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
@@ -46,7 +46,11 @@ soup_cli/
     pretrain.py        # PretrainTrainerWrapper (294 lines, continued pre-training)
     reward_model.py    # RewardModelTrainerWrapper (272 lines, RLHF stage 2)
     embedding.py       # EmbeddingTrainerWrapper (contrastive/triplet/cosine loss)
-    rewards.py         # Built-in reward fns (accuracy, format) + custom .py loader
+    rewards.py         # Built-in reward fns (accuracy, format) + RLVR (math/code/json_schema) + custom .py (v0.25.0)
+    mlx_sft.py         # MLX SFT trainer for Apple Silicon (v0.25.0)
+    mlx_dpo.py         # MLX DPO trainer scaffold (v0.25.0)
+    mlx_grpo.py        # MLX GRPO trainer scaffold (v0.25.0)
+    mlx_routing.py     # MLX trainer registry with lazy imports (v0.25.0)
   commands/
     ...
     data.py            # soup data (inspect/validate/convert/merge/dedup/stats/filter/split/search/preview/download/register)
@@ -54,10 +58,16 @@ soup_cli/
     callback.py        # HF TrainerCallback -> Rich display + SQLite tracker
     display.py         # Rich Live terminal dashboard (2Hz refresh)
   eval/
-    custom.py          # Custom eval task runner (JSONL tasks, scoring functions)
+    custom.py          # Custom eval task runner + tool-call scoring (v0.25.0)
     judge.py           # LLM-as-a-judge evaluator (OpenAI/Ollama/server backends)
     human.py           # Human evaluation (A/B comparison, Elo ratings)
     leaderboard.py     # Leaderboard aggregation, run comparison, export
+    forgetting.py      # Catastrophic forgetting detection (v0.25.0)
+    checkpoint_intelligence.py  # Best-checkpoint-by-quality tracker (v0.25.0)
+  autopilot/           # Zero-config decision engine (v0.25.0)
+    analyzer.py        # Dataset / model / hardware profiling
+    decisions.py       # Task / quantization / PEFT / LR / epochs / max_length picker
+    generate_config.py # YAML config generator
   experiment/
     tracker.py         # SQLite at ~/.soup/experiments.db (runs, metrics, eval_results)
   migrate/
@@ -68,6 +78,7 @@ soup_cli/
   recipes/
     catalog.py         # 29 ready-made RecipeMeta configs for popular models
   commands/
+    autopilot.py       # soup autopilot — zero-config fine-tuning (v0.25.0)
     train.py           # soup train (routes to SFT/DPO/GRPO/PPO/Reward/KTO/ORPO/SimPO/IPO)
     deploy.py          # soup deploy ollama (deploy GGUF to Ollama)
     init.py            # soup init (interactive wizard + 10 templates)
@@ -115,7 +126,9 @@ soup_cli/
     freeze.py          # Freeze training: freeze bottom N layers
     registry.py        # Dataset registry: name → path + format mapping
     constants.py       # APP_NAME, paths, default chat template
-tests/                 # 78 test files, 2130 tests
+    mlx.py             # Apple Silicon MLX detection + memory helpers (v0.25.0)
+    peft_builder.py    # Unified LoRA / DoRA / VeRA / OLoRA config builder (v0.25.0)
+tests/                 # 86 test files, 2313 tests
 examples/
   configs/             # 7 production-ready YAML examples
   data/                # Sample datasets
@@ -124,6 +137,7 @@ examples/
 ## CLI Commands
 
 ```
+soup autopilot         # Zero-config: pick task/quant/LR/epochs from data+model+goal (v0.25.0)
 soup init              # Create config (interactive or --template)
 soup train             # Main training (--config, --resume, --wandb, --tensorboard, --deepspeed, --fsdp, --yes)
 soup infer             # Batch inference (--model, --input, --output)
@@ -150,6 +164,7 @@ soup data merge        # Combine multiple datasets
 soup data dedup        # MinHash deduplication
 soup data stats        # Extended statistics with histograms
 soup data generate     # Synthetic data via LLM APIs (--provider openai|local|server|ollama|anthropic|vllm)
+soup data augment      # Augment dataset via LLM: rephrase/translate/style (v0.25.0)
 soup migrate           # Import config from LLaMA-Factory/Axolotl/Unsloth (--from, --dry-run)
 soup recipes list      # List all ready-made recipes (30 configs)
 soup recipes show      # Print recipe YAML to stdout
@@ -184,14 +199,14 @@ soup version           # Show version (--full for details)
 
 `config/schema.py` is the single source of truth. Pydantic v2 models:
 
-- **SoupConfig**: base (required), task (sft/dpo/kto/orpo/simpo/ipo/grpo/ppo/reward_model/pretrain/embedding), modality (text/vision/audio), backend (transformers/unsloth), data, training, output, eval
+- **SoupConfig**: base (required), task (sft/dpo/kto/orpo/simpo/ipo/grpo/ppo/reward_model/pretrain/embedding), modality (text/vision/audio), backend (transformers/unsloth/mlx), data, training, output, eval
 - **EvalConfig**: auto_eval, benchmarks, custom_tasks, judge
-- **DataConfig**: train, format (alpaca/sharegpt/chatml/dpo/kto/llava/sharegpt4v/plaintext/embedding/audio/auto), val_split, max_length, image_dir, audio_dir
-- **TrainingConfig**: epochs, lr, batch_size (int or "auto"), quantization (4bit/8bit/none), quantization_aware, optimizer, scheduler, dpo_beta, kto_beta, orpo_beta, simpo_gamma, cpo_alpha, ipo_tau, grpo_beta, num_generations, reward_fn, ppo_epochs, ppo_clip_ratio, ppo_kl_penalty, reward_model, loraplus_lr_ratio, use_galore, galore_rank, galore_update_proj_gap, galore_scale, moe_lora, moe_aux_loss_coeff, use_liger, use_flash_attn, use_ring_attention, rope_scaling_type, gradient_checkpointing, embedding_loss, embedding_margin, embedding_pooling, embedding_temperature, neftune_alpha, packing, curriculum, curriculum_metric, curriculum_buckets, loss_watchdog, loss_watchdog_threshold, loss_watchdog_patience, freeze_layers, freeze_ratio
-- **LoraConfig**: r, alpha, dropout, target_modules, use_dora, use_rslora
+- **DataConfig**: train, format (alpaca/sharegpt/chatml/dpo/kto/llava/sharegpt4v/plaintext/embedding/audio/tool-calling/auto), val_split, max_length, image_dir, audio_dir
+- **TrainingConfig**: epochs, lr, batch_size (int or "auto"), quantization (4bit/8bit/none), quantization_aware, optimizer, scheduler, dpo_beta, kto_beta, orpo_beta, simpo_gamma, cpo_alpha, ipo_tau, grpo_beta, num_generations, reward_fn, verifiable_domain (math/code/json_schema — v0.25.0), ppo_epochs, ppo_clip_ratio, ppo_kl_penalty, reward_model, loraplus_lr_ratio, use_galore, galore_rank, galore_update_proj_gap, galore_scale, moe_lora, moe_aux_loss_coeff, use_liger, use_flash_attn, use_ring_attention, rope_scaling_type, gradient_checkpointing, embedding_loss, embedding_margin, embedding_pooling, embedding_temperature, neftune_alpha, packing, curriculum, curriculum_metric, curriculum_buckets, loss_watchdog, loss_watchdog_threshold, loss_watchdog_patience, freeze_layers, freeze_ratio, forgetting_detection, forgetting_eval_steps, forgetting_threshold, forgetting_benchmark, forgetting_stop, checkpoint_intelligence, checkpoint_eval_steps, checkpoint_eval_metric, checkpoint_eval_tasks, checkpoint_keep_top, early_stop_on_regression, early_stop_patience (v0.25.0)
+- **LoraConfig**: r, alpha, dropout, target_modules, use_dora, use_rslora, use_vera, use_olora (v0.25.0)
 
-15 built-in templates: chat, code, medical, reasoning, vision, audio, kto, orpo, simpo, ipo, embedding, rlhf, pretrain, moe, longcontext.
-29 ready-made recipes via `soup recipes` (Llama 3.1/3.2, Qwen 2.5/3, Mistral, Gemma 3, Phi-4, DeepSeek R1).
+16 built-in templates: chat, code, medical, reasoning, vision, audio, kto, orpo, simpo, ipo, embedding, rlhf, pretrain, moe, longcontext, tool-calling (v0.25.0).
+43 ready-made recipes via `soup recipes` (Llama 3.1/3.2/4, Qwen 2.5/3, Mistral, Gemma 3, Phi-4, DeepSeek R1/V3, MLX Apple Silicon SFT).
 
 ## Training Tasks
 
@@ -217,7 +232,7 @@ soup version           # Show version (--full for details)
 - **Format auto-detection**: `detect_format()` checks first row keys
 - **Rich output**: All UX via `rich.console.Console`, never bare `print()`
 - **Callback bridge**: `SoupTrainerCallback` connects HF Trainer events to Rich display + SQLite
-- **Backend abstraction**: `--backend` flag for training (transformers/unsloth) and serving (transformers/vllm/sglang)
+- **Backend abstraction**: `--backend` flag for training (transformers/unsloth/mlx) and serving (transformers/vllm/sglang). MLX (v0.25.0) enables Apple Silicon fine-tuning for SFT/DPO/GRPO via `mlx-lm`; all imports are lazy.
 - **Error mapping**: Pattern-based friendly errors with fix suggestions in `utils/errors.py`
 
 ## Security (v0.10.10+)
@@ -303,6 +318,20 @@ soup version           # Show version (--full for details)
 - **Runs compare**: max 5 runs per comparison (v0.24.3)
 - **Config from-form**: validates via load_config_from_string before returning YAML (v0.24.3)
 - **SSE endpoints**: read-only GET, no auth required (consistent with other GET endpoints) (v0.24.3)
+- **Tool-calling format**: JSON-only parsing of `tool_calls.arguments` — no eval, no remote code (v0.25.0)
+- **RLVR math_verify**: regex-extracted numeric literals + `float()` — no eval on user content (v0.25.0)
+- **RLVR code_exec**: best-effort sandbox with 5s timeout, 512MB RLIMIT_AS/CPU on POSIX, ephemeral cwd, socket patch, `python -I -S`; prominent warning panel on first use (v0.25.0)
+- **RLVR code_exec**: output capped at 10KB to prevent disk/memory DoS (v0.25.0)
+- **verifiable_domain**: Literal["math", "code", "json_schema"] — prevents injection (v0.25.0)
+- **LoRA mutual exclusion**: use_dora/use_vera/use_olora validated as mutually exclusive (v0.25.0)
+- **Data augment**: input/output paths confined to cwd via resolve + relative_to (v0.25.0)
+- **Data augment**: count capped at 10, lang/styles capped at 10 entries × 32 chars each (v0.25.0)
+- **Forgetting detection**: eval_steps [10, 10_000], threshold [0.01, 0.50] bounded (v0.25.0)
+- **Checkpoint intelligence**: keep_top [1, 20], patience [1, 10] bounded; prune refuses symlinks + non-child paths (v0.25.0)
+- **Checkpoint eval tasks**: path stays under cwd when configured (v0.25.0)
+- **Autopilot**: data+output paths resolve + relative_to(cwd) — path traversal protection (v0.25.0)
+- **Autopilot**: goal Literal constraint, gpu_budget parsed with [1GB, 1TB] bounds (v0.25.0)
+- **MLX trainers**: no trust_remote_code — mlx-lm loads weights directly (v0.25.0)
 
 ## Code Conventions
 
@@ -376,7 +405,7 @@ soup version           # Show version (--full for details)
 15. **Tag**: `git tag v0.X.Y && git push origin v0.X.Y`
 16. **Release**: `gh release create v0.X.Y` with changelog (What's New, Install/Upgrade)
 
-## Tests (78 test files, 2065 tests)
+## Tests (86 test files, 2313 tests)
 
 | File | Covers |
 |------|--------|
@@ -457,3 +486,10 @@ soup version           # Show version (--full for details)
 | test_ui_metrics.py | Web UI: metrics full fields, runs compare, eval results display |
 | test_ui_chat.py | Web UI: chat proxy SSE, SSRF protection, param bounds, auth |
 | test_ui_config_builder.py | Web UI: config schema, recipes API, form-to-YAML endpoint |
+| test_tool_calling.py | Tool-calling format detection, normalization, eval scoring, recipes (Part B v0.25.0) |
+| test_rlvr.py | RLVR verifiable rewards: math_verify, code_exec sandbox, json_schema (Part C v0.25.0) |
+| test_peft_methods.py | VeRA + OLoRA LoraConfig fields, peft_builder, sweep integration (Part D v0.25.0) |
+| test_mlx_backend.py | Apple Silicon MLX backend: detection, trainers, routing, recipes (Part E v0.25.0) |
+| test_data_augment.py | Data augmentation: rephrase/translate/style strategies, CLI, security (Part F v0.25.0) |
+| test_training_intelligence.py | Forgetting detection + checkpoint intelligence + SQLite schema (Part G v0.25.0) |
+| test_autopilot.py | Autopilot: dataset/model/hardware analysis, decision engine, CLI (Part H v0.25.0) |

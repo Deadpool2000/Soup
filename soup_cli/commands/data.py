@@ -1290,6 +1290,164 @@ def _get_registry_path() -> Path:
     return _default_registry_path()
 
 
+@app.command(name="augment")
+def augment_data(
+    input_path: str = typer.Option(..., "--input", "-i", help="Source JSONL file"),
+    output_path: str = typer.Option(
+        "augmented.jsonl", "--output", "-o", help="Output JSONL path"
+    ),
+    strategy: str = typer.Option(
+        "rephrase", "--strategy", "-s",
+        help="Augmentation strategy: rephrase, translate, style",
+    ),
+    provider: str = typer.Option(
+        "ollama", "--provider", "-p",
+        help="LLM provider: openai, ollama, anthropic, server, vllm",
+    ),
+    count: int = typer.Option(
+        2, "--count", "-c", min=1, max=10,
+        help="Augmentation multiplier (1-10)",
+    ),
+    lang: str = typer.Option(
+        "", "--lang", help="Comma-separated target languages for translate",
+    ),
+    styles: str = typer.Option(
+        "", "--styles", help="Comma-separated styles for style strategy",
+    ),
+    requests_per_minute: int = typer.Option(
+        60, "--requests-per-minute", min=1, max=600,
+        help="Rate limit for provider requests",
+    ),
+    dedup: bool = typer.Option(
+        False, "--dedup", help="Deduplicate augmented + original data",
+    ),
+):
+    """Augment a dataset via LLM (rephrase / translate / style)."""
+    from soup_cli.data.augment import STRATEGIES
+
+    if strategy not in STRATEGIES:
+        console.print(
+            f"[red]Unknown strategy: {strategy}. "
+            f"Options: {', '.join(STRATEGIES.keys())}[/]"
+        )
+        raise typer.Exit(1)
+
+    # Path traversal protection for input
+    try:
+        input_resolved = Path(input_path).resolve()
+        input_resolved.relative_to(Path.cwd().resolve())
+    except ValueError:
+        console.print("[red]Input path must be under the current working directory.[/]")
+        raise typer.Exit(1)
+
+    if not input_resolved.exists():
+        console.print(f"[red]Input file not found: {input_resolved}[/]")
+        raise typer.Exit(1)
+
+    # Path traversal protection for output
+    try:
+        output_resolved = Path(output_path).resolve()
+        output_resolved.relative_to(Path.cwd().resolve())
+    except ValueError:
+        console.print("[red]Output path must be under the current working directory.[/]")
+        raise typer.Exit(1)
+
+    # Load data
+    data = load_raw_data(input_resolved)
+    if not data:
+        console.print("[red]Input dataset is empty.[/]")
+        raise typer.Exit(1)
+
+    console.print(
+        f"[dim]Loaded {len(data)} examples from {input_resolved.name}[/]"
+    )
+
+    # Load provider
+    provider_instance = _load_augment_provider(provider, requests_per_minute)
+
+    max_entries = 10
+    max_entry_len = 32
+
+    def _bounded_list(raw: str, field: str) -> list[str]:
+        parts = [s.strip() for s in raw.split(",") if s.strip()]
+        if len(parts) > max_entries:
+            raise ValueError(
+                f"--{field} accepts at most {max_entries} entries"
+            )
+        for entry in parts:
+            if len(entry) > max_entry_len:
+                raise ValueError(
+                    f"--{field} entries must be <= {max_entry_len} chars"
+                )
+        return parts
+
+    # Run strategy
+    augment_fn = STRATEGIES[strategy]
+    try:
+        if strategy == "translate":
+            target_langs = _bounded_list(lang, "lang")
+            augmented = augment_fn(
+                data, provider=provider_instance,
+                languages=target_langs or None,
+            )
+        elif strategy == "style":
+            target_styles = _bounded_list(styles, "styles")
+            augmented = augment_fn(
+                data, provider=provider_instance, styles=target_styles or None,
+            )
+        else:
+            augmented = augment_fn(data, provider=provider_instance, count=count)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+
+    # Optional dedup
+    if dedup:
+        seen = set()
+        deduped: list[dict] = []
+        for row in data + augmented:
+            key = json.dumps(row, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(row)
+        final_rows = deduped
+    else:
+        final_rows = data + augmented
+
+    # Write output
+    output_resolved.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_resolved, "w", encoding="utf-8") as fh:
+        for row in final_rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    console.print(
+        f"[green]Augmentation complete:[/] {len(data)} → {len(final_rows)} "
+        f"({strategy} via {provider})\n"
+        f"  Output: {output_resolved}"
+    )
+
+
+def _load_augment_provider(provider: str, rpm: int):
+    """Construct an LLM provider instance with generate(prompt) method."""
+    # Minimal provider abstraction — wraps existing sync clients.
+    if provider == "ollama":
+        from soup_cli.data.providers.ollama import OllamaProvider
+
+        return OllamaProvider(model="llama3.1:8b", rate_limit_rpm=rpm)
+    if provider == "anthropic":
+        from soup_cli.data.providers.anthropic import AnthropicProvider
+
+        return AnthropicProvider(model="claude-3-5-haiku-20241022", rate_limit_rpm=rpm)
+    if provider == "vllm":
+        from soup_cli.data.providers.vllm import VllmProvider
+
+        return VllmProvider(base_url="http://localhost:8000/v1", rate_limit_rpm=rpm)
+    raise ValueError(
+        f"Unknown provider '{provider}'. Options: ollama, anthropic, vllm."
+    )
+
+
 @app.command(name="register")
 def register_data(
     name: str = typer.Option(..., "--name", "-n", help="Dataset name"),

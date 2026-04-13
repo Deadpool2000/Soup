@@ -11,8 +11,10 @@ Supported formats:
 - plaintext: {"text": "..."} — raw text for continued pre-training
 - embedding: {"anchor": ..., "positive": ..., "negative": ...} — sentence embedding pairs/triplets
 - audio: {"audio": ..., "messages": [...]} — audio + conversation for speech models
+- tool-calling: {"messages": [...], "tools": [...], "tool_calls": [...]} — function-calling training
 """
 
+import json
 from typing import Optional
 
 from rich.console import Console
@@ -31,6 +33,7 @@ FORMAT_SIGNATURES = {
     "embedding": {"anchor", "positive"},
     "audio": {"audio", "messages"},
     "plaintext": {"text"},
+    "tool-calling": {"messages", "tools", "tool_calls"},
 }
 
 
@@ -42,11 +45,12 @@ def detect_format(data: list[dict]) -> str:
     sample = data[0]
     keys = set(sample.keys())
 
-    # Check more specific formats first (llava/sharegpt4v before sharegpt)
-    # plaintext ("text" key only) checked last to avoid false matches
+    # Check more specific formats first (llava/sharegpt4v before sharegpt).
+    # tool-calling checked before chatml (signature is a superset of chatml).
+    # plaintext ("text" key only) checked last to avoid false matches.
     check_order = [
         "alpaca", "llava", "sharegpt4v", "kto", "dpo", "embedding",
-        "audio", "sharegpt", "chatml", "plaintext",
+        "audio", "tool-calling", "sharegpt", "chatml", "plaintext",
     ]
     for fmt in check_order:
         required_keys = FORMAT_SIGNATURES[fmt]
@@ -62,6 +66,7 @@ def detect_format(data: list[dict]) -> str:
         f"llava/sharegpt4v (image, conversations), "
         f"embedding (anchor, positive), "
         f"audio (audio, messages), "
+        f"tool-calling (messages, tools, tool_calls), "
         f"plaintext (text)"
     )
 
@@ -77,7 +82,7 @@ def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
     """
     valid_formats = (
         "chatml", "alpaca", "sharegpt", "dpo", "kto", "llava", "sharegpt4v",
-        "plaintext", "embedding", "audio",
+        "plaintext", "embedding", "audio", "tool-calling",
     )
     if fmt not in valid_formats:
         raise ValueError(f"Unknown format: {fmt}")
@@ -98,6 +103,8 @@ def format_to_messages(row: dict, fmt: str) -> Optional[dict]:
             return _convert_embedding(row)
         elif fmt == "audio":
             return _convert_audio(row)
+        elif fmt == "tool-calling":
+            return _convert_tool_calling(row)
         else:
             return _convert_vision(row)
     except (KeyError, TypeError, IndexError, ValueError):
@@ -235,6 +242,109 @@ def _convert_vision(row: dict) -> dict:
     if "id" in row:
         result["id"] = row["id"]
     return result
+
+
+def _convert_tool_calling(row: dict) -> dict:
+    """Normalize tool-calling row to unified messages format.
+
+    Input:
+        {
+            "messages": [{"role": "user", "content": ...}],
+            "tools": [{"type": "function", "function": {...}}, ...],
+            "tool_calls": [{"function": {"name": ..., "arguments": "json-string"}}],
+        }
+
+    Output (unified format — tool schema embedded in system message,
+    tool_calls attached to final assistant turn):
+        {
+            "messages": [
+                {"role": "system", "content": "<tool schema description>"},
+                {"role": "user", "content": "..."},
+                {"role": "assistant", "content": "", "tool_calls": [...]},
+            ]
+        }
+
+    Security: every tool_call's 'arguments' must be JSON-parseable. Tool schemas
+    must be a list of dicts. Invalid rows raise ValueError and are mapped to None
+    by the outer handler.
+    """
+    tools = row["tools"]
+    tool_calls = row["tool_calls"]
+
+    if not isinstance(tools, list):
+        raise ValueError("tool-calling 'tools' must be a list")
+    if not isinstance(tool_calls, list):
+        raise ValueError("tool-calling 'tool_calls' must be a list")
+
+    for tool in tools:
+        if not isinstance(tool, dict):
+            raise ValueError("tool-calling tool entries must be dicts")
+
+    normalized_tool_calls = []
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            raise ValueError("tool_calls entries must be dicts")
+        func = call.get("function")
+        if not isinstance(func, dict):
+            raise ValueError("tool_calls entry missing 'function' dict")
+        name = func.get("name")
+        if not isinstance(name, str) or not name:
+            raise ValueError("tool_calls 'function.name' must be a non-empty string")
+        args = func.get("arguments", "{}")
+        if isinstance(args, str):
+            try:
+                json.loads(args)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"tool_calls 'arguments' must be JSON-parseable: {exc}"
+                ) from exc
+            args_str = args
+        elif isinstance(args, dict):
+            args_str = json.dumps(args)
+        else:
+            raise ValueError("tool_calls 'arguments' must be str or dict")
+        normalized_tool_calls.append({
+            "function": {"name": name, "arguments": args_str},
+        })
+
+    original_messages = row["messages"]
+    if not isinstance(original_messages, list) or not original_messages:
+        raise ValueError("tool-calling 'messages' must be a non-empty list")
+
+    tool_schema_descriptions = []
+    for tool in tools:
+        function_def = tool.get("function", {})
+        tool_name = function_def.get("name", "unknown")
+        description = function_def.get("description", "")
+        params = function_def.get("parameters", {})
+        tool_schema_descriptions.append(
+            f"- {tool_name}: {description}\n  parameters: {json.dumps(params)}"
+        )
+
+    system_content = (
+        "You have access to the following tools. When a tool call is needed, "
+        "respond with a function call in JSON.\n\n"
+        + "\n".join(tool_schema_descriptions)
+    )
+
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+    for msg in original_messages:
+        if not isinstance(msg, dict) or "role" not in msg:
+            raise ValueError("tool-calling messages must be dicts with 'role'")
+        if msg["role"] == "system":
+            # Merge user system message into our synthesized system content
+            messages[0]["content"] = msg.get("content", "") + "\n\n" + messages[0]["content"]
+            continue
+        messages.append({"role": msg["role"], "content": msg.get("content", "")})
+
+    if normalized_tool_calls:
+        messages.append({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": normalized_tool_calls,
+        })
+
+    return {"messages": messages}
 
 
 def is_vision_format(fmt: str) -> bool:

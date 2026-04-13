@@ -60,8 +60,33 @@ CREATE TABLE IF NOT EXISTS eval_results (
     created_at   TEXT NOT NULL
 );
 
+-- Training Intelligence (v0.25.0 Part G)
+CREATE TABLE IF NOT EXISTS checkpoint_quality (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id     TEXT REFERENCES runs(run_id),
+    step       INTEGER NOT NULL,
+    metric     TEXT NOT NULL,
+    score      REAL NOT NULL,
+    is_best    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS forgetting_eval (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id        TEXT REFERENCES runs(run_id),
+    step          INTEGER NOT NULL,
+    benchmark     TEXT NOT NULL,
+    accuracy      REAL NOT NULL,
+    baseline      REAL NOT NULL,
+    delta         REAL NOT NULL,
+    warning_level TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_metrics_run_id ON metrics(run_id);
 CREATE INDEX IF NOT EXISTS idx_eval_run_id ON eval_results(run_id);
+CREATE INDEX IF NOT EXISTS idx_ckpt_quality_run_id ON checkpoint_quality(run_id);
+CREATE INDEX IF NOT EXISTS idx_forgetting_run_id ON forgetting_eval(run_id);
 """
 
 
@@ -106,6 +131,10 @@ class ExperimentTracker:
         conn = self._get_conn()
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
+
+    def init_db(self) -> None:
+        """Public alias for schema initialization (v0.25.0+)."""
+        self._ensure_schema()
 
     def start_run(
         self,

@@ -36,6 +36,17 @@ soup init --template chat
 soup train
 ```
 
+### New in v0.25.0 — "Beyond the Wrapper"
+
+- **`soup autopilot`** — give it a model, a dataset, and a goal; Soup picks the task, quantization, LoRA rank, LR, epochs, and perf flags automatically
+- **Apple Silicon MLX backend** — train on M1-M4 chips via `pip install 'soup-cli[mlx]'`
+- **Tool-calling / agentic fine-tuning** — new `tool-calling` data format + eval scoring
+- **RLVR verifiable rewards** — `reward_fn: verifiable` with `verifiable_domain: math | code | json_schema` for deterministic GRPO rewards
+- **VeRA + OLoRA PEFT** — `lora.use_vera` / `lora.use_olora` for smaller-footprint adaptation
+- **Data augmentation** — `soup data augment --strategy rephrase|translate|style`
+- **Training intelligence** — optional `forgetting_detection` + `checkpoint_intelligence` tracks catastrophic forgetting and picks the best checkpoint by quality, not just loss
+- **9 new recipes** — Llama 4 Scout, Qwen 3 14B/32B, Gemma 3 12B/27B, DeepSeek V3, plus 5 MLX recipes (45 total)
+
 ## Why Soup?
 
 Training LLMs is still painful. Even experienced teams spend 30-50% of their time fighting infrastructure instead of improving models. Soup fixes that.

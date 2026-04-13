@@ -101,11 +101,12 @@ soup_cli/
   experiment/         - SQLite experiment tracking
   eval/               - Eval platform (custom tasks, LLM judge, human eval, leaderboard)
   migrate/            - Config migration (LLaMA-Factory, Axolotl, Unsloth)
-  recipes/            - Ready-made configs for popular models (29 recipes)
-  utils/              - GPU, errors, MoE, GaLore, QAT, Unsloth, vLLM, SGLang, Liger, FlashAttn, FSDP, Ring Attention, long-context, quality, curriculum, freeze, registry
+  recipes/            - Ready-made configs for popular models (43 recipes)
+  autopilot/          - Zero-config decision engine (v0.25.0)
+  utils/              - GPU, errors, MoE, GaLore, QAT, Unsloth, vLLM, SGLang, Liger, FlashAttn, FSDP, Ring Attention, long-context, quality, curriculum, freeze, registry, mlx, peft_builder
   ui/                 - Web UI (FastAPI + HTML/JS SPA)
 
-tests/                - Test suite (74 files, 2061 tests)
+tests/                - Test suite (86 files, 2313 tests)
 examples/             - Real-world config examples and datasets
 ```
 
@@ -135,7 +136,7 @@ pytest tests/test_data.py::test_detect_alpaca_format -v
 pytest tests/ --cov=soup_cli --cov-report=html
 ```
 
-### Test Files (74 files)
+### Test Files (86 files)
 
 | File | Covers |
 |------|--------|
@@ -212,6 +213,13 @@ pytest tests/ --cov=soup_cli --cov-report=html
 | test_freeze_training.py | Freeze training: config, layer freezing, GPT-2 naming, sweep |
 | test_loss_watchdog.py | Loss watchdog: config, callback behavior, patience, sweep |
 | test_dataset_registry.py | Dataset registry: CRUD, CLI, name validation, error handling |
+| test_tool_calling.py | Tool-calling format detection, normalization, eval scoring, recipes (v0.25.0) |
+| test_rlvr.py | RLVR verifiable rewards: math_verify, code_exec sandbox, json_schema (v0.25.0) |
+| test_peft_methods.py | VeRA + OLoRA LoraConfig, peft_builder, sweep integration (v0.25.0) |
+| test_mlx_backend.py | Apple Silicon MLX backend: detection, trainers, routing (v0.25.0) |
+| test_data_augment.py | Data augmentation: rephrase/translate/style strategies, CLI, security (v0.25.0) |
+| test_training_intelligence.py | Forgetting detection + checkpoint intelligence + SQLite (v0.25.0) |
+| test_autopilot.py | Autopilot: analyzers, decision engine, CLI (v0.25.0) |
 
 ## Making Changes
 

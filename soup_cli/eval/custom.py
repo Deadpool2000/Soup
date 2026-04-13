@@ -6,13 +6,16 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 MAX_EVAL_TASKS = 10_000
 MAX_REGEX_PATTERN_LEN = 1_000
 MAX_REGEX_INPUT_LEN = 50_000
 
-VALID_SCORING = {"exact", "contains", "regex", "semantic"}
+VALID_SCORING = {
+    "exact", "contains", "regex", "semantic",
+    "tool_call_match", "tool_call_name_match", "tool_call_args_subset",
+}
 
 
 @dataclass
@@ -23,7 +26,7 @@ class EvalTask:
     expected: str = ""
     category: str = "default"
     scoring: str = "exact"
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -44,7 +47,7 @@ class EvalResults:
     total: int = 0
     correct: int = 0
     accuracy: float = 0.0
-    category_scores: dict[str, dict] = field(default_factory=dict)
+    category_scores: dict[str, dict[str, float]] = field(default_factory=dict)
 
     def compute(self) -> None:
         """Compute aggregate scores from individual results."""
@@ -175,10 +178,112 @@ def score_semantic(output: str, expected: str) -> float:
     return len(intersection) / len(union)
 
 
+def _parse_tool_call(text: str) -> Optional[dict]:
+    """Parse a tool-call JSON blob. Returns None on any failure."""
+    if not isinstance(text, str):
+        return None
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _extract_function(call: dict) -> Optional[dict]:
+    func = call.get("function")
+    if not isinstance(func, dict):
+        return None
+    return func
+
+
+def _parse_args(func: dict) -> Optional[dict]:
+    args = func.get("arguments")
+    if isinstance(args, dict):
+        return args
+    if isinstance(args, str):
+        try:
+            parsed = json.loads(args)
+        except (json.JSONDecodeError, ValueError):
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def tool_call_match(output: str, expected: str) -> bool:
+    """Exact tool-call match: function name and arguments must match."""
+    out = _parse_tool_call(output)
+    exp = _parse_tool_call(expected)
+    if out is None or exp is None:
+        return False
+    out_func = _extract_function(out)
+    exp_func = _extract_function(exp)
+    if out_func is None or exp_func is None:
+        return False
+    if out_func.get("name") != exp_func.get("name"):
+        return False
+    out_args = _parse_args(out_func)
+    exp_args = _parse_args(exp_func)
+    if out_args is None or exp_args is None:
+        return False
+    return out_args == exp_args
+
+
+def tool_call_name_match(output: str, expected: str) -> bool:
+    """Function-name-only match (ignores arguments)."""
+    out = _parse_tool_call(output)
+    exp = _parse_tool_call(expected)
+    if out is None or exp is None:
+        return False
+    out_func = _extract_function(out)
+    exp_func = _extract_function(exp)
+    if out_func is None or exp_func is None:
+        return False
+    name_out = out_func.get("name")
+    name_exp = exp_func.get("name")
+    return isinstance(name_out, str) and name_out == name_exp
+
+
+def tool_call_args_subset(output: str, expected: str) -> float:
+    """Partial-credit score for tool-call arguments (subset matching).
+
+    Returns 0.0–1.0:
+    - 0.5 weight for function-name match
+    - 0.5 weight for fraction of expected args present (with matching values)
+    """
+    out = _parse_tool_call(output)
+    exp = _parse_tool_call(expected)
+    if out is None or exp is None:
+        return 0.0
+    out_func = _extract_function(out)
+    exp_func = _extract_function(exp)
+    if out_func is None or exp_func is None:
+        return 0.0
+
+    name_score = 0.5 if out_func.get("name") == exp_func.get("name") else 0.0
+
+    out_args = _parse_args(out_func) or {}
+    exp_args = _parse_args(exp_func) or {}
+
+    if not exp_args:
+        args_score = 0.5 if not out_args else 0.5
+    else:
+        matched = sum(
+            1 for k, v in exp_args.items() if k in out_args and out_args[k] == v
+        )
+        args_score = 0.5 * (matched / len(exp_args))
+
+    return name_score + args_score
+
+
 SCORING_FUNCTIONS = {
     "exact": score_exact,
     "contains": score_contains,
     "regex": score_regex,
+    "tool_call_match": tool_call_match,
+    "tool_call_name_match": tool_call_name_match,
 }
 
 
@@ -186,6 +291,13 @@ def score_task(task: EvalTask, output: str) -> EvalResult:
     """Score a single task output against the expected answer."""
     if task.scoring == "semantic":
         similarity = score_semantic(output, task.expected)
+        matched = similarity >= 0.5
+        return EvalResult(
+            task=task, output=output, score=similarity, matched=matched,
+        )
+
+    if task.scoring == "tool_call_args_subset":
+        similarity = tool_call_args_subset(output, task.expected)
         matched = similarity >= 0.5
         return EvalResult(
             task=task, output=output, score=similarity, matched=matched,

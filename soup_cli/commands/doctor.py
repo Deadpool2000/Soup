@@ -126,6 +126,18 @@ def doctor():
     console.print(f"\n[dim]GitHub: [link={GITHUB_URL}]{GITHUB_URL}[/link][/]")
 
 
+def _get_mlx_info() -> dict:
+    """Surface MLX info in the doctor report (never crashes on non-Apple)."""
+    try:
+        from soup_cli.utils.mlx import get_mlx_info
+    except ImportError:
+        return {"available": False}
+    try:
+        return get_mlx_info()
+    except Exception:  # noqa: BLE001
+        return {"available": False}
+
+
 def _check_gpu():
     """Check GPU availability and display info."""
     try:

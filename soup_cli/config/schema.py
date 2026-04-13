@@ -3,7 +3,7 @@
 import re
 from typing import List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class LoraConfig(BaseModel):
@@ -22,13 +22,47 @@ class LoraConfig(BaseModel):
         default=False,
         description="Enable rank-stabilized LoRA scaling (better for high ranks)",
     )
+    use_vera: bool = Field(
+        default=False,
+        description=(
+            "Enable VeRA (Vector-based Random Matrix Adaptation). "
+            "Shared random matrices — much smaller memory than LoRA. "
+            "Mutually exclusive with use_dora and use_olora."
+        ),
+    )
+    use_olora: bool = Field(
+        default=False,
+        description=(
+            "Enable OLoRA (Orthogonal LoRA init via QR decomposition). "
+            "Passes init_lora_weights='olora' to peft. "
+            "Mutually exclusive with use_dora and use_vera."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_peft_exclusivity(self) -> "LoraConfig":
+        enabled = [
+            name for name, value in (
+                ("use_dora", self.use_dora),
+                ("use_vera", self.use_vera),
+                ("use_olora", self.use_olora),
+            )
+            if value
+        ]
+        if len(enabled) > 1:
+            raise ValueError(
+                f"PEFT methods are mutually exclusive, got multiple enabled: "
+                f"{', '.join(enabled)}. Pick at most one of use_dora, "
+                f"use_vera, use_olora."
+            )
+        return self
 
 
 class DataConfig(BaseModel):
     train: str = Field(..., description="Path to training data or HF dataset name")
     format: Literal[
         "alpaca", "sharegpt", "chatml", "dpo", "kto", "llava", "sharegpt4v",
-        "plaintext", "embedding", "audio", "auto",
+        "plaintext", "embedding", "audio", "tool-calling", "auto",
     ] = Field(
         default="auto",
         description="Data format",
@@ -104,7 +138,18 @@ class TrainingConfig(BaseModel):
     )
     reward_fn: Optional[str] = Field(
         default="accuracy",
-        description="Reward function: 'accuracy', 'format', or path to custom .py file",
+        description=(
+            "Reward function: 'accuracy', 'format', 'verifiable', "
+            "or path to custom .py file"
+        ),
+    )
+    # RLVR — verifiable reward domain (Part C of v0.25.0)
+    verifiable_domain: Optional[Literal["math", "code", "json_schema"]] = Field(
+        default=None,
+        description=(
+            "RLVR verifiable reward domain: math | code | json_schema. "
+            "Required when reward_fn='verifiable'."
+        ),
     )
     # PPO-specific
     ppo_epochs: int = Field(
@@ -246,6 +291,67 @@ class TrainingConfig(BaseModel):
         le=50.0,
         description="NEFTune noise alpha (0-50). Adds noise to embeddings for better chat quality.",
     )
+    # Training Intelligence — Part G of v0.25.0
+    # Forgetting detection
+    forgetting_detection: bool = Field(
+        default=False,
+        description="Enable periodic general-knowledge eval to detect catastrophic forgetting",
+    )
+    forgetting_eval_steps: int = Field(
+        default=100, ge=10, le=10000,
+        description="Run forgetting eval every N steps",
+    )
+    forgetting_threshold: float = Field(
+        default=0.10, ge=0.01, le=0.50,
+        description="Warn if accuracy drops > threshold from baseline (0.01-0.50)",
+    )
+    forgetting_benchmark: Literal["mini_mmlu", "mini_common_sense", "mini_instruction"] = Field(
+        default="mini_mmlu",
+        description="Built-in mini benchmark used for forgetting detection",
+    )
+    forgetting_stop: bool = Field(
+        default=False,
+        description="Auto-stop training on severe forgetting (red-level alert)",
+    )
+    # Checkpoint intelligence
+    checkpoint_intelligence: bool = Field(
+        default=False,
+        description="Enable auto-best-checkpoint tracking by quality (not just loss)",
+    )
+    checkpoint_eval_steps: int = Field(
+        default=200, ge=50, le=10000,
+        description="Run checkpoint quality eval every N steps",
+    )
+    checkpoint_eval_metric: Literal["judge", "mmlu", "custom", "composite"] = Field(
+        default="composite",
+        description="Metric used for checkpoint quality selection",
+    )
+    checkpoint_eval_tasks: Optional[str] = Field(
+        default=None,
+        description="Optional JSONL file with custom eval tasks for checkpoint scoring",
+    )
+    checkpoint_keep_top: int = Field(
+        default=3, ge=1, le=20,
+        description="Keep top-N checkpoints by quality, delete the rest",
+    )
+    early_stop_on_regression: bool = Field(
+        default=False,
+        description="Stop training when quality regresses across consecutive evals",
+    )
+    early_stop_patience: int = Field(
+        default=2, ge=1, le=10,
+        description="Consecutive regressions before early stopping (1-10)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_verifiable_reward(self) -> "TrainingConfig":
+        """RLVR: reward_fn='verifiable' requires verifiable_domain."""
+        if self.reward_fn == "verifiable" and self.verifiable_domain is None:
+            raise ValueError(
+                "reward_fn='verifiable' requires verifiable_domain "
+                "(one of: math, code, json_schema)"
+            )
+        return self
 
 
 class EvalConfig(BaseModel):
@@ -283,9 +389,12 @@ class SoupConfig(BaseModel):
         default="text",
         description="Training modality: text (default), vision (multimodal), or audio",
     )
-    backend: Literal["transformers", "unsloth"] = Field(
+    backend: Literal["transformers", "unsloth", "mlx"] = Field(
         default="transformers",
-        description="Training backend: transformers (default) or unsloth (2-5x faster)",
+        description=(
+            "Training backend: transformers (default), unsloth (2-5x faster on "
+            "CUDA), or mlx (Apple Silicon M1-M4)"
+        ),
     )
     data: DataConfig
     training: TrainingConfig = Field(default_factory=TrainingConfig)
@@ -307,6 +416,25 @@ class SoupConfig(BaseModel):
                 "experiment_name must not contain path separators (/ \\ :) or null bytes"
             )
         return value
+
+    @model_validator(mode="after")
+    def _validate_mlx_task_support(self) -> "SoupConfig":
+        """MLX backend only supports sft, dpo, and grpo tasks (v0.25.0).
+
+        DPO and GRPO wrappers are scaffolding in v0.25.0 — they raise
+        NotImplementedError at ``train()`` time because upstream mlx-lm has
+        not yet shipped DPO/GRPO training helpers. Users who pick them will
+        instead see this friendly error at config-load time.
+        """
+        if self.backend != "mlx":
+            return self
+        if self.task == "sft":
+            return self
+        raise ValueError(
+            f"MLX backend only ships SFT in v0.25.0; task='{self.task}' "
+            "is not yet implemented (upstream mlx-lm does not expose a "
+            f"training helper). Use backend=transformers for task={self.task}."
+        )
 
 
 # --- Built-in templates ---
@@ -730,6 +858,46 @@ training:
   quantization: 4bit
 
 output: ./output_audio
+""",
+    "tool-calling": """# Soup template: Tool-Calling / Agentic Fine-tuning
+# Fine-tune a model to call tools / functions correctly
+#
+# Data format (JSONL):
+#   {
+#     "messages": [{"role": "user", "content": "What's the weather in Tokyo?"}],
+#     "tools": [{"type": "function", "function": {
+#       "name": "get_weather",
+#       "description": "Get current weather for a city",
+#       "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+#     }}],
+#     "tool_calls": [{"function": {
+#       "name": "get_weather",
+#       "arguments": "{\\"city\\": \\"Tokyo\\"}"
+#     }}]
+#   }
+
+base: meta-llama/Llama-3.1-8B-Instruct
+task: sft
+# backend: unsloth  # 2-5x faster, pip install 'soup-cli[fast]'
+
+data:
+  train: ./data/tool_calling_train.jsonl
+  format: tool-calling
+  val_split: 0.1
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  gradient_accumulation_steps: 4
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
 """,
     "rlhf": """# Soup template: Full RLHF Pipeline (SFT + Reward Model + PPO)
 # Three-stage training: 1) SFT warmup, 2) Reward model, 3) PPO alignment

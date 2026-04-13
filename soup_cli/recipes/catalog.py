@@ -876,6 +876,420 @@ training:
 output: ./output
 """,
     ),
+    # ---------------- v0.25.0: Llama 4 / Qwen 3 / Gemma 3 / DeepSeek V3 ----------------
+    "llama4-scout-17b-sft": RecipeMeta(
+        model="meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        task="sft",
+        size="17B",
+        tags=("llama", "llama4", "sft", "chat", "instruction"),
+        description="Llama 4 Scout 17B SFT with LoRA (4bit)",
+        yaml_str="""\
+base: meta-llama/Llama-4-Scout-17B-16E-Instruct
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "llama4-scout-17b-dpo": RecipeMeta(
+        model="meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        task="dpo",
+        size="17B",
+        tags=("llama", "llama4", "dpo", "alignment", "preference"),
+        description="Llama 4 Scout 17B DPO alignment",
+        yaml_str="""\
+base: meta-llama/Llama-4-Scout-17B-16E-Instruct
+task: dpo
+
+data:
+  train: ./data/preference_train.jsonl
+  format: dpo
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 5e-6
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  dpo_beta: 0.1
+
+output: ./output
+""",
+    ),
+    "llama4-scout-17b-grpo": RecipeMeta(
+        model="meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        task="grpo",
+        size="17B",
+        tags=("llama", "llama4", "grpo", "reasoning"),
+        description="Llama 4 Scout 17B GRPO reasoning training",
+        yaml_str="""\
+base: meta-llama/Llama-4-Scout-17B-16E-Instruct
+task: grpo
+
+data:
+  train: ./data/reasoning_train.jsonl
+  format: auto
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 1e-5
+  batch_size: auto
+  gradient_accumulation_steps: 8
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  grpo_beta: 0.1
+  num_generations: 4
+  reward_fn: accuracy
+
+output: ./output
+""",
+    ),
+    "qwen3-14b-sft": RecipeMeta(
+        model="Qwen/Qwen3-14B",
+        task="sft",
+        size="14B",
+        tags=("qwen", "qwen3", "sft", "chat"),
+        description="Qwen 3 14B instruction tuning with LoRA",
+        yaml_str="""\
+base: Qwen/Qwen3-14B
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "qwen3-32b-sft": RecipeMeta(
+        model="Qwen/Qwen3-32B",
+        task="sft",
+        size="32B",
+        tags=("qwen", "qwen3", "sft", "large", "deepspeed"),
+        description="Qwen 3 32B SFT with DeepSpeed ZeRO-2",
+        yaml_str="""\
+base: Qwen/Qwen3-32B
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-5
+  batch_size: auto
+  gradient_accumulation_steps: 8
+  lora:
+    r: 32
+    alpha: 64
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "qwen3-8b-grpo": RecipeMeta(
+        model="Qwen/Qwen3-8B",
+        task="grpo",
+        size="8B",
+        tags=("qwen", "qwen3", "grpo", "reasoning"),
+        description="Qwen 3 8B GRPO reasoning training",
+        yaml_str="""\
+base: Qwen/Qwen3-8B
+task: grpo
+
+data:
+  train: ./data/reasoning_train.jsonl
+  format: auto
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 1e-5
+  batch_size: auto
+  gradient_accumulation_steps: 8
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  grpo_beta: 0.1
+  num_generations: 4
+  reward_fn: accuracy
+
+output: ./output
+""",
+    ),
+    "gemma3-12b-sft": RecipeMeta(
+        model="google/gemma-3-12b-it",
+        task="sft",
+        size="12B",
+        tags=("gemma", "gemma3", "google", "sft", "chat"),
+        description="Gemma 3 12B instruction tuning",
+        yaml_str="""\
+base: google/gemma-3-12b-it
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "gemma3-27b-dpo": RecipeMeta(
+        model="google/gemma-3-27b-it",
+        task="dpo",
+        size="27B",
+        tags=("gemma", "gemma3", "google", "dpo", "alignment"),
+        description="Gemma 3 27B DPO alignment",
+        yaml_str="""\
+base: google/gemma-3-27b-it
+task: dpo
+
+data:
+  train: ./data/preference_train.jsonl
+  format: dpo
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 5e-6
+  batch_size: auto
+  gradient_accumulation_steps: 8
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  dpo_beta: 0.1
+
+output: ./output
+""",
+    ),
+    "deepseek-v3-7b-sft": RecipeMeta(
+        model="deepseek-ai/DeepSeek-V3-0324",
+        task="sft",
+        size="7B",
+        tags=("deepseek", "sft", "moe", "mixture-of-experts"),
+        description="DeepSeek V3 SFT with MoE LoRA",
+        yaml_str="""\
+base: deepseek-ai/DeepSeek-V3-0324
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-4
+  batch_size: auto
+  gradient_accumulation_steps: 8
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  moe_lora: true
+  moe_aux_loss_coeff: 0.01
+
+output: ./output
+""",
+    ),
+    # ---------------- v0.25.0: Apple Silicon MLX recipes ----------------
+    "llama3.1-8b-sft-mlx": RecipeMeta(
+        model="mlx-community/Llama-3.1-8B-Instruct-4bit",
+        task="sft",
+        size="8B",
+        tags=("llama", "mlx", "apple-silicon", "sft"),
+        description="Llama 3.1 8B SFT on Apple Silicon via MLX (M2+ 16GB)",
+        yaml_str="""\
+base: mlx-community/Llama-3.1-8B-Instruct-4bit
+task: sft
+backend: mlx
+
+data:
+  train: ./data/train.jsonl
+  format: chatml
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-4
+  batch_size: 2
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "qwen3-8b-sft-mlx": RecipeMeta(
+        model="mlx-community/Qwen3-8B-Instruct-4bit",
+        task="sft",
+        size="8B",
+        tags=("qwen", "qwen3", "mlx", "apple-silicon", "sft"),
+        description="Qwen 3 8B SFT on Apple Silicon via MLX (M2+ 16GB)",
+        yaml_str="""\
+base: mlx-community/Qwen3-8B-Instruct-4bit
+task: sft
+backend: mlx
+
+data:
+  train: ./data/train.jsonl
+  format: chatml
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-4
+  batch_size: 2
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "gemma3-9b-sft-mlx": RecipeMeta(
+        model="mlx-community/gemma-3-9b-it-4bit",
+        task="sft",
+        size="9B",
+        tags=("gemma", "gemma3", "mlx", "apple-silicon", "sft"),
+        description="Gemma 3 9B SFT on Apple Silicon via MLX (M2+ 16GB)",
+        yaml_str="""\
+base: mlx-community/gemma-3-9b-it-4bit
+task: sft
+backend: mlx
+
+data:
+  train: ./data/train.jsonl
+  format: chatml
+  max_length: 2048
+
+training:
+  epochs: 3
+  lr: 1e-4
+  batch_size: 2
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "qwen3-8b-tools": RecipeMeta(
+        model="Qwen/Qwen3-8B",
+        task="sft",
+        size="8B",
+        tags=("qwen", "qwen3", "sft", "tool-calling", "agentic", "function-calling"),
+        description="Qwen 3 8B tool-calling / function-calling SFT",
+        yaml_str="""\
+base: Qwen/Qwen3-8B
+task: sft
+
+data:
+  train: ./data/tool_calling_train.jsonl
+  format: tool-calling
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  gradient_accumulation_steps: 4
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
+    "llama4-scout-tools": RecipeMeta(
+        model="meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        task="sft",
+        size="17B",
+        tags=("llama", "llama4", "sft", "tool-calling", "agentic", "function-calling"),
+        description="Llama 4 Scout 17B tool-calling / function-calling SFT",
+        yaml_str="""\
+base: meta-llama/Llama-4-Scout-17B-16E-Instruct
+task: sft
+
+data:
+  train: ./data/tool_calling_train.jsonl
+  format: tool-calling
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: auto
+  gradient_accumulation_steps: 4
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+
+output: ./output
+""",
+    ),
     "llama3.1-8b-ipo": RecipeMeta(
         model="meta-llama/Llama-3.1-8B-Instruct",
         task="ipo",
