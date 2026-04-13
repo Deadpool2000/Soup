@@ -662,11 +662,34 @@ class TestPPOExperimentalSetup:
 # --- BUG-008: GRPO CPU empty generation tensor mismatch (v0.10.6) ---
 
 
+def _trl_grpo_importable() -> bool:
+    """Detect whether trl.trainer.grpo_trainer can be imported on this host.
+
+    Upstream trl occasionally ships source files that read auxiliary data
+    without an explicit encoding. On Windows with the default cp1252
+    (``charmap``) codec this fails at import time with a ``UnicodeDecodeError``.
+    Our CI forces ``PYTHONUTF8=1`` for safety; this helper is a belt-and-braces
+    check so the test skips cleanly instead of erroring out if the env var is
+    missing locally.
+    """
+    try:
+        import trl  # noqa: F401
+        import trl.trainer.grpo_trainer  # noqa: F401
+    except (UnicodeDecodeError, ImportError, RuntimeError):
+        return False
+    return True
+
+
 class TestGRPOCPUMinNewTokens:
     """Test GRPO CPU workaround: generation_kwargs with min_new_tokens."""
 
     def test_cpu_adds_generation_kwargs(self):
         """On CPU, GRPO setup should add generation_kwargs with min_new_tokens."""
+        if not _trl_grpo_importable():
+            pytest.skip(
+                "trl.trainer.grpo_trainer not importable on this host "
+                "(likely Windows cp1252 without PYTHONUTF8=1)"
+            )
         from unittest.mock import MagicMock
         from unittest.mock import patch as mock_patch
 
@@ -711,6 +734,11 @@ class TestGRPOCPUMinNewTokens:
 
     def test_gpu_no_generation_kwargs(self):
         """On GPU, GRPO setup should NOT add generation_kwargs for min_new_tokens."""
+        if not _trl_grpo_importable():
+            pytest.skip(
+                "trl.trainer.grpo_trainer not importable on this host "
+                "(likely Windows cp1252 without PYTHONUTF8=1)"
+            )
         from unittest.mock import MagicMock
         from unittest.mock import patch as mock_patch
 
