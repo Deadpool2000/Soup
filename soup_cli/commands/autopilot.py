@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -17,6 +18,30 @@ from soup_cli.autopilot.decisions import GOAL_TO_TASK, parse_gpu_budget
 from soup_cli.autopilot.generate_config import build_soup_config, write_yaml
 
 console = Console()
+
+
+def _is_under_cwd(path: Path) -> bool:
+    """Check whether ``path`` resolves inside the current working directory.
+
+    Uses ``os.path.realpath`` for both sides instead of ``Path.resolve()``.
+    On Windows + Python 3.9, ``Path.resolve()`` occasionally leaves 8.3 short
+    names (e.g. ``C:\\Users\\RUNNER~1``) in one of the two paths but not the
+    other, making ``relative_to`` fail even when the paths refer to the same
+    location. ``realpath`` handles the short-name expansion consistently.
+    """
+    try:
+        resolved = os.path.realpath(str(path))
+        cwd = os.path.realpath(str(Path.cwd()))
+    except (OSError, ValueError):
+        return False
+    if os.name == "nt":
+        resolved = resolved.lower()
+        cwd = cwd.lower()
+    try:
+        common = os.path.commonpath([resolved, cwd])
+    except ValueError:
+        return False
+    return common == cwd
 
 
 def autopilot_cmd(
@@ -51,12 +76,11 @@ def autopilot_cmd(
         raise typer.Exit(1)
 
     # Path traversal protection — data must stay under cwd
-    try:
-        data_path = Path(data).resolve()
-        data_path.relative_to(Path.cwd().resolve())
-    except ValueError:
+    data_path = Path(data)
+    if not _is_under_cwd(data_path):
         console.print("[red]Data path must be under the current working directory.[/]")
         raise typer.Exit(1)
+    data_path = Path(os.path.realpath(str(data_path)))
 
     if not data_path.exists():
         console.print(f"[red]Data file not found: {data_path}[/]")
@@ -133,12 +157,11 @@ def autopilot_cmd(
         return
 
     # Path traversal protection for output
-    try:
-        output_path = Path(output).resolve()
-        output_path.relative_to(Path.cwd().resolve())
-    except ValueError:
+    output_raw = Path(output)
+    if not _is_under_cwd(output_raw):
         console.print("[red]Output path must be under the current working directory.[/]")
         raise typer.Exit(1)
+    output_path = Path(os.path.realpath(str(output_raw)))
 
     if output_path.exists() and not yes:
         if not typer.confirm(f"{output_path} exists. Overwrite?"):

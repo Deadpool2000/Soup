@@ -335,7 +335,11 @@ class TestAutopilotCLI:
             "--output", "soup.yaml",
             "--yes",
         ])
-        assert result.exit_code == 0
+        assert result.exit_code == 0, (
+            f"exit={result.exit_code}\n"
+            f"output={result.output}\n"
+            f"exception={result.exception!r}"
+        )
         assert (tmp_path / "soup.yaml").exists()
 
     def test_rejects_path_traversal_data(self, tmp_path, monkeypatch):
