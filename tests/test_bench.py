@@ -1,7 +1,8 @@
 """Tests for soup bench CLI command."""
 
-from soup_cli.cli import app
 from typer.testing import CliRunner
+
+from soup_cli.cli import app
 
 runner = CliRunner()
 
