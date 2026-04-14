@@ -9,6 +9,7 @@ from soup_cli import __version__
 from soup_cli.commands import (
     adapters,
     autopilot,
+    bench,
     chat,
     data,
     deploy,
@@ -82,6 +83,7 @@ app.command()(sweep.sweep)
 app.command(name="diff")(diff.diff)
 app.command()(infer.infer)
 app.command()(profile.profile)
+app.command()(bench.bench)
 app.command()(doctor_cmd.doctor)
 app.command()(quickstart_cmd.quickstart)
 app.command()(ui.ui)
