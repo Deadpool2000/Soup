@@ -861,6 +861,20 @@ soup infer --model ./output --input prompts.jsonl --output results.jsonl \
 
 Output is JSONL with `prompt`, `response`, and `tokens_generated` fields. Shows a progress bar and throughput summary.
 
+## Inference Benchmarking
+
+Quickly measure your model's generation speed and memory footprint before deployment:
+
+```bash
+# Benchmark local speed and VRAM usage on 3 automatically generated prompts
+soup bench ./output
+
+# Customizing benchmarking parameters
+soup bench ./output --num-prompts 5 --max-tokens 256
+```
+
+This acts as a built-in "speedometer," outputting Tokens-Per-Second (TPS), Total Latency, and Peak VRAM allocations into a clean status table.
+
 ## TensorBoard Integration
 
 Log training metrics to TensorBoard for local visualization:
