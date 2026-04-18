@@ -93,7 +93,9 @@ def bench(
         try:
             p_path.relative_to(Path.cwd())
         except ValueError:
-            console.print(f"[red]Security Error:[/] Path {p_path} is outside the current working directory.")
+            console.print(
+                f"[red]Security Error:[/] Path {p_path} is outside the current working directory."
+            )
             raise typer.Exit(1)
             
         if not p_path.is_file():
