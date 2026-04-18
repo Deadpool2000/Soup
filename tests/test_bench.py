@@ -34,8 +34,8 @@ def test_bench_custom_prompts(tmp_path, monkeypatch):
 
     from unittest.mock import patch
 
-    with patch("soup_cli.commands.bench._load_model") as mock_load, \
-         patch("soup_cli.commands.bench._generate") as mock_generate:
+    with patch("soup_cli.commands.infer._load_model") as mock_load, \
+         patch("soup_cli.commands.infer._generate") as mock_generate:
 
         mock_load.return_value = ("mock_model", "mock_tokenizer")
         mock_generate.return_value = (None, 10)
