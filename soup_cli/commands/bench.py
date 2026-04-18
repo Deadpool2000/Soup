@@ -89,7 +89,7 @@ def bench(
     if prompts_file:
         import json
         p_path = Path(prompts_file).resolve()
-        
+
         try:
             p_path.relative_to(Path.cwd())
         except ValueError:
@@ -97,11 +97,11 @@ def bench(
                 f"[red]Security Error:[/] Path {p_path} is outside the current working directory."
             )
             raise typer.Exit(1)
-            
+
         if not p_path.is_file():
             console.print(f"[red]Prompts file not found:[/] {p_path}")
             raise typer.Exit(1)
-            
+
         prompts = []
         try:
             if p_path.suffix == ".jsonl":
@@ -121,18 +121,18 @@ def bench(
         except Exception as e:
             console.print(f"[red]Failed to read prompts file:[/] {e}")
             raise typer.Exit(1)
-            
+
         if not prompts:
             console.print("[red]No prompts found in file.[/]")
             raise typer.Exit(1)
-            
+
         # If user provided a custom file but didn't explicitly override num_prompts (default 3),
         # we assume they want to run all prompts in the file.
         # However, to avoid parsing typer args manually, if len(prompts) > num_prompts, we'll
         # just use len(prompts) as the default behavior, unless they want fewer?
         # Actually, let's just set num_prompts to the length of the file if it's larger than 3.
         # Or better: we just construct test_prompts directly.
-        # But wait, what if they want to run 100 prompts by repeating a 5-prompt file? 
+        # But wait, what if they want to run 100 prompts by repeating a 5-prompt file?
         # Then test_prompts logic handles it. Let's just keep the existing logic.
     else:
         prompts = [
@@ -142,7 +142,7 @@ def bench(
             "Compose a poem about a wandering space traveler.",
             "Describe how a database index works under the hood.",
         ]
-        
+
     # If using custom prompts and default num_prompts (3) is smaller, run all custom prompts
     # unless they explicitly want exactly 3. Since we can't easily check if it's default,
     # we'll use max(num_prompts, len(prompts)) when custom prompts are provided.
