@@ -76,7 +76,7 @@ def test_bench_custom_prompts(tmp_path, monkeypatch):
 
 
 def test_bench_happy_path(tmp_path, monkeypatch):
-    """Test full benchmark end-to-end happy path without actual models."""
+    """Happy path on CUDA: verify panel, table, TPS, and VRAM rendering end-to-end."""
     monkeypatch.chdir(tmp_path)
 
     dummy_model = tmp_path / "dummy_model"
@@ -94,19 +94,27 @@ def test_bench_happy_path(tmp_path, monkeypatch):
         mock_load.return_value = ("mock_model", "mock_tokenizer")
         mock_generate.return_value = ("mock response", 128)
         mock_is_available.return_value = True
-        mock_max_memory.return_value = 4 * 1024**3
+        mock_max_memory.return_value = 4 * 1024**3  # 4 GB
         mock_detect_device.return_value = ("cuda", 0)
 
         result = runner.invoke(app, ["bench", str(dummy_model)])
 
-        assert result.exit_code == 0, result.output
+        assert result.exit_code == 0, (result.output, repr(result.exception))
+        # Panel rendered
+        assert "Benchmarking Configuration" in result.output
+        # Results table rendered with expected columns
         assert "Inference Benchmark Results" in result.output
         assert "TPS (Avg)" in result.output
+        # Token count propagated from mocked _generate
         assert "128 tokens" in result.output
+        # VRAM value derived from mocked max_memory_allocated (4 GB)
+        assert "4.00 GB" in result.output
+        # Warmup + main loop: mock_generate called (warmup + num_prompts=3)
+        assert mock_generate.call_count == 1 + 3
 
 
 def test_bench_cpu_warning(tmp_path, monkeypatch):
-    """Test that CPU warning is shown on non-CUDA devices."""
+    """CPU path: warning shown and VRAM column falls back to N/A."""
     monkeypatch.chdir(tmp_path)
 
     dummy_model = tmp_path / "dummy_model"
@@ -126,6 +134,8 @@ def test_bench_cpu_warning(tmp_path, monkeypatch):
 
         result = runner.invoke(app, ["bench", str(dummy_model)])
 
-        assert result.exit_code == 0, result.output
+        assert result.exit_code == 0, (result.output, repr(result.exception))
         assert "Running on CPU" in result.output
         assert "Inference Benchmark Results" in result.output
+        # Without CUDA, VRAM column shows N/A
+        assert "N/A" in result.output
