@@ -32,7 +32,12 @@ def bench(
         3,
         "--num-prompts",
         "-n",
-        help="Number of prompts to run for averaging",
+        help="Number of prompts to run for averaging (ignored when --prompts-file is set)",
+    ),
+    prompts_file: Optional[str] = typer.Option(
+        None,
+        "--prompts-file",
+        help="Path to custom prompts file (.txt or .jsonl)",
     ),
 ) -> None:
     """Run an inference benchmark (speed and memory) on a loaded model."""
@@ -54,11 +59,63 @@ def bench(
             "10-100x slower than GPU -- results will not reflect production TPS."
         )
 
+    if prompts_file:
+        import json
+        p_path = Path(prompts_file).resolve()
+
+        try:
+            p_path.relative_to(Path.cwd())
+        except ValueError:
+            console.print(
+                f"[red]Security Error:[/] Path {p_path} is outside the current working directory."
+            )
+            raise typer.Exit(1)
+
+        if not p_path.is_file():
+            console.print(f"[red]Prompts file not found:[/] {p_path}")
+            raise typer.Exit(1)
+
+        prompts = []
+        try:
+            if p_path.suffix == ".jsonl":
+                with open(p_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            data = json.loads(line)
+                            if "prompt" in data:
+                                prompts.append(data["prompt"])
+            else:
+                with open(p_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            prompts.append(line)
+        except Exception as e:
+            console.print(f"[red]Failed to read prompts file:[/] {e}")
+            raise typer.Exit(1)
+
+        if not prompts:
+            console.print("[red]No prompts found in file.[/]")
+            raise typer.Exit(1)
+
+        # If --prompts-file is provided, we use all prompts in the file and ignore num_prompts.
+    else:
+        prompts = [
+            "Explain the theory of relativity briefly.",
+            "Write a short Python function to calculate fibonacci numbers.",
+            "What are the main consequences of the Industrial Revolution?",
+            "Compose a poem about a wandering space traveler.",
+            "Describe how a database index works under the hood.",
+        ]
+
+    actual_num_prompts = len(prompts) if prompts_file else num_prompts
+
     console.print(
         Panel(
             f"Model:    [bold]{model_path}[/]\n"
             f"Device:   [bold]{device}[/]\n"
-            f"Prompts:  [bold]{num_prompts}[/]\n"
+            f"Prompts:  [bold]{actual_num_prompts}[/]\n"
             f"Tokens/P: [bold]{max_tokens}[/]",
             title="Benchmarking Configuration",
         )
@@ -81,14 +138,7 @@ def bench(
     load_time = time.time() - start_load
     console.print(f"[green]Model loaded in {load_time:.2f}s.[/]\n")
 
-    prompts = [
-        "Explain the theory of relativity briefly.",
-        "Write a short Python function to calculate fibonacci numbers.",
-        "What are the main consequences of the Industrial Revolution?",
-        "Compose a poem about a wandering space traveler.",
-        "Describe how a database index works under the hood.",
-    ]
-    test_prompts = (prompts * (num_prompts // len(prompts) + 1))[:num_prompts]
+    test_prompts = (prompts * (actual_num_prompts // len(prompts) + 1))[:actual_num_prompts]
 
     # Warmup run: first inference includes CUDA kernel JIT compilation,
     # which would skew the average. Discarded from timing.
@@ -102,7 +152,7 @@ def bench(
     total_tokens = 0
     total_latency = 0.0
 
-    console.print(f"[bold]Running {num_prompts} test inferences...[/]")
+    console.print(f"[bold]Running {len(test_prompts)} test inferences...[/]")
 
     for i, prompt_text in enumerate(test_prompts):
         messages = [{"role": "user", "content": prompt_text}]
