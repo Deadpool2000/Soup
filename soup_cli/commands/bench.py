@@ -78,28 +78,28 @@ def bench(
         prompts = []
         try:
             if p_path.suffix == ".jsonl":
-                with open(p_path, "r", encoding="utf-8") as f:
-                    for line in f:
+                with open(p_path, encoding="utf-8") as fh:
+                    for line in fh:
                         line = line.strip()
                         if line:
                             data = json.loads(line)
                             if "prompt" in data:
                                 prompts.append(data["prompt"])
             else:
-                with open(p_path, "r", encoding="utf-8") as f:
-                    for line in f:
+                with open(p_path, encoding="utf-8") as fh:
+                    for line in fh:
                         line = line.strip()
                         if line:
                             prompts.append(line)
-        except Exception as e:
-            console.print(f"[red]Failed to read prompts file:[/] {e}")
-            raise typer.Exit(1)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            console.print(f"[red]Failed to read prompts file:[/] {exc}")
+            raise typer.Exit(1) from exc
 
         if not prompts:
             console.print("[red]No prompts found in file.[/]")
             raise typer.Exit(1)
 
-        # If --prompts-file is provided, we use all prompts in the file and ignore num_prompts.
+        # When --prompts-file is provided, run all prompts in the file; --num-prompts is ignored.
     else:
         prompts = [
             "Explain the theory of relativity briefly.",

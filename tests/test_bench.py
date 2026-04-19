@@ -13,6 +13,7 @@ def test_bench_model_not_found():
     assert result.exit_code == 1
     assert "not found" in result.output.lower()
 
+
 def test_bench_custom_prompts(tmp_path, monkeypatch):
     """Test using custom prompts from a text file and JSONL."""
     monkeypatch.chdir(tmp_path)
@@ -40,17 +41,33 @@ def test_bench_custom_prompts(tmp_path, monkeypatch):
         mock_load.return_value = ("mock_model", "mock_tokenizer")
         mock_generate.return_value = (None, 10)
 
-        # Test 1: TXT
+        # Test 1: TXT -- verify exit, output, and that actual prompts were passed to _generate
         result = runner.invoke(app, ["bench", str(dummy_model), "--prompts-file", "prompts.txt"])
-        assert result.exit_code == 0
+        assert result.exit_code == 0, (result.output, repr(result.exception))
         assert "Running 2 test inferences" in result.output
 
-        # Test 2: JSONL
+        used_contents = [
+            call.args[2][0]["content"]
+            for call in mock_generate.call_args_list
+        ]
+        assert "Custom prompt 1" in used_contents
+        assert "Custom prompt 2" in used_contents
+
+        mock_generate.reset_mock()
+
+        # Test 2: JSONL -- verify JSON prompt field was extracted and used
         result = runner.invoke(app, ["bench", str(dummy_model), "--prompts-file", "prompts.jsonl"])
-        assert result.exit_code == 0
+        assert result.exit_code == 0, (result.output, repr(result.exception))
         assert "Running 2 test inferences" in result.output
 
-        # Test 3: Path outside CWD
+        used_contents = [
+            call.args[2][0]["content"]
+            for call in mock_generate.call_args_list
+        ]
+        assert "JSON prompt 1" in used_contents
+        assert "JSON prompt 2" in used_contents
+
+        # Test 3: Path outside CWD -- security check
         result = runner.invoke(
             app, ["bench", str(dummy_model), "--prompts-file", str(outside_file)]
         )
