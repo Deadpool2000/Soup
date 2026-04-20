@@ -103,9 +103,9 @@ soup_cli/
   migrate/            - Config migration (LLaMA-Factory, Axolotl, Unsloth)
   recipes/            - Ready-made configs for popular models (43 recipes)
   autopilot/          - Zero-config decision engine (v0.25.0)
-  registry/           - Model Registry (hashing, store, diff) (v0.26.0 Part A)
-  cans/               - Shareable .can artifact format (v0.26.0 Part E)
-  data/traces/        - Trace-to-Preference harvester (v0.26.0 Part C)
+  registry/           - Model Registry (hashing, store, diff) (v0.26.0)
+  cans/               - Shareable .can artifact format (v0.26.0)
+  data/traces/        - Trace-to-Preference harvester (v0.26.0)
   utils/              - GPU, errors, MoE, GaLore, QAT, Unsloth, vLLM, SGLang, Liger, FlashAttn, FSDP, Ring Attention, long-context, quality, curriculum, freeze, dataset-registry, mlx, peft_builder, paths
   ui/                 - Web UI (FastAPI + HTML/JS SPA)
 

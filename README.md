@@ -40,11 +40,11 @@ soup train
 
 The flywheel: **Train -> Registry -> Deploy -> Observe -> Improve -> Train**.
 
-- **Local Model Registry** (Part A) — `soup registry push/list/show/diff/search/promote/delete`: track every fine-tune with lineage, config, and eval baseline. `soup history <name>` renders the full DAG. Backing store: `~/.soup/registry.db`.
-- **Eval-Gated Training** (Part B) — `training.eval_gate` (or `soup train --gate evals/gate.yaml`) runs a declarative suite at epoch boundaries and halts training on regression. `soup eval gate` for post-hoc verdicts. Baselines may be `registry://<id>`, a file, or omitted.
-- **Trace-to-Preference** (Part C) — `soup data from-traces` ingests LangChain / OpenAI / Soup-serve logs, builds DPO/KTO-ready preference pairs from thumbs, regenerations, or user edits. `soup data review` previews pairs before training.
-- **Quant-Lobotomy Checker** (Part D) — `soup eval quant-check --before X --after Y --tasks t.jsonl` renders an OK / MINOR / MAJOR verdict per task so you never ship a quantization regression unknowingly.
-- **Soup Cans** (Part E) — `.can` = tar.gz of manifest + config + data_ref. `soup can pack/inspect/verify/fork` makes recipes shareable + reproducible; safe tar extraction blocks symlink / path-traversal escape; 100 MB cap; format version locked to 1.
+- **Local Model Registry** — `soup registry push/list/show/diff/search/promote/delete`: track every fine-tune with lineage, config, and eval baseline. `soup history <name>` renders the full DAG. Backing store: `~/.soup/registry.db`.
+- **Eval-Gated Training** — `training.eval_gate` (or `soup train --gate evals/gate.yaml`) runs a declarative suite at epoch boundaries and halts training on regression. `soup eval gate` for post-hoc verdicts. Baselines may be `registry://<id>`, a file, or omitted.
+- **Trace-to-Preference** — `soup data from-traces` ingests LangChain / OpenAI / Soup-serve logs, builds DPO/KTO-ready preference pairs from thumbs, regenerations, or user edits. `soup data review` previews pairs before training.
+- **Quant-Lobotomy Checker** — `soup eval quant-check --before X --after Y --tasks t.jsonl` renders an OK / MINOR / MAJOR verdict per task so you never ship a quantization regression unknowingly.
+- **Soup Cans** — `.can` = tar.gz of manifest + config + data_ref. `soup can pack/inspect/verify/fork` makes recipes shareable + reproducible; safe tar extraction blocks symlink / path-traversal escape; 100 MB cap; format version locked to 1.
 - **Security-hardened**: name/tag validation; SQL LIKE-wildcard escaping; Windows-safe path containment via shared `os.path.realpath + commonpath`; SSRF allowlist on judge URLs; HTTPS-only `DataRef`; dunder-key / null-byte rejection in can-fork; cycle detection in lineage walks; structured-error-as-regression policy in eval gate.
 
 ### New in v0.25.0 — "Beyond the Wrapper"

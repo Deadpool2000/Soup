@@ -440,6 +440,7 @@ soup version           # Show version (--full for details)
 - **"Phase"** = a single version release (e.g. v0.26.0). NOT individual sub-Parts (A/B/C/D/E).
 - **"Part"** = a chunk of work within a phase (e.g. v0.26.0 Part A = Model Registry). Parts are an internal decomposition for TDD + review efficiency, not for separate releases.
 - **One release per phase.** All Parts ship together under a single tag. Bumping version before all Parts land is fine; tagging is ONE time per phase.
+- **"Part A/B/C/D/E" is internal-only terminology** — it belongs in `.claude/plan.md`, `.claude/CLAUDE.md`, commit messages, and GitHub issues. It **must NOT** appear in user-facing docs: `README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `examples/README.md`, release notes. Users care about features and versions, not our internal breakdown. In public docs, describe each feature by its user-facing name only (e.g. "Local Model Registry"), with an optional `(vX.Y.Z)` tag to show when it shipped.
 
 **Multi-part phases (A, B, C…):** implement part by part. Write tests FIRST (TDD), then implement to pass them. Run `ruff check soup_cli/ tests/` + `pytest tests/ -v --tb=short` after each part to catch issues early. Commits CAN be split per Part (for bisect clarity) but the release / tag / PyPI publish happens ONCE after all Parts pass the full checklist. Only proceed to the Release Checklist below after ALL parts pass lint + tests.
 
