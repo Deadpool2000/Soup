@@ -1,12 +1,12 @@
 # Soup CLI — Project CLAUDE.md
 
-Soup is a CLI-first LLM fine-tuning tool (v0.25.0). Python 3.9+, MIT license.
+Soup is a CLI-first LLM fine-tuning tool (v0.26.0). Python 3.9+, MIT license.
 
 ## Build & Development
 
 ```bash
 pip install -e ".[dev]"          # Install editable + test deps
-pytest tests/ -v --tb=short      # Run all tests (2313 tests)
+pytest tests/ -v --tb=short      # Run all tests (2409 tests)
 ruff check soup_cli/ tests/      # Lint (must pass before commit)
 ruff check --fix soup_cli/ tests/  # Auto-fix lint issues
 ```
@@ -68,6 +68,10 @@ soup_cli/
     analyzer.py        # Dataset / model / hardware profiling
     decisions.py       # Task / quantization / PEFT / LR / epochs / max_length picker
     generate_config.py # YAML config generator
+  registry/            # Local Model Registry / Provenance Vault (v0.26.0 Part A)
+    hashing.py         # SHA-256 of config + data + base model
+    store.py           # SQLite store: CRUD, artifacts, lineage DAG, search, resolve
+    diff.py            # config_diff + eval_delta helpers
   experiment/
     tracker.py         # SQLite at ~/.soup/experiments.db (runs, metrics, eval_results)
   migrate/
@@ -101,6 +105,8 @@ soup_cli/
     doctor.py          # soup doctor (resources, dependency + GPU checker)
     quickstart.py      # soup quickstart (20-example TinyLlama demo)
     ui.py              # soup ui (launches FastAPI web UI)
+    registry.py        # soup registry (push/list/show/diff/search/promote/delete) — v0.26.0
+    history.py         # soup history <name> (lineage DAG viewer) — v0.26.0
   ui/
     app.py             # FastAPI REST API (auth token, CORS, path traversal protection)
     static/            # SPA: Dashboard, New Training, Data Explorer, Model Chat
@@ -128,7 +134,7 @@ soup_cli/
     constants.py       # APP_NAME, paths, default chat template
     mlx.py             # Apple Silicon MLX detection + memory helpers (v0.25.0)
     peft_builder.py    # Unified LoRA / DoRA / VeRA / OLoRA config builder (v0.25.0)
-tests/                 # 86 test files, 2313 tests
+tests/                 # 87 test files, 2409 tests
 examples/
   configs/             # 7 production-ready YAML examples
   data/                # Sample datasets
@@ -137,6 +143,14 @@ examples/
 ## CLI Commands
 
 ```
+soup registry push     # Register a completed run (v0.26.0)
+soup registry list     # List registry entries (filter by name/tag/base/task)
+soup registry show     # Show full entry details + artifacts + ancestors
+soup registry search   # Case-insensitive search across name/base/task/notes
+soup registry diff     # Side-by-side config diff + eval delta between 2 entries
+soup registry promote  # Add a tag (e.g. "prod") to an existing entry
+soup registry delete   # Remove an entry (cascades to artifacts/lineage/tags)
+soup history <name>    # Lineage DAG tree for all entries with the given name
 soup autopilot         # Zero-config: pick task/quant/LR/epochs from data+model+goal (v0.25.0)
 soup init              # Create config (interactive or --template)
 soup train             # Main training (--config, --resume, --wandb, --tensorboard, --deepspeed, --fsdp, --yes)
@@ -332,6 +346,13 @@ soup version           # Show version (--full for details)
 - **Autopilot**: data+output paths resolve + relative_to(cwd) — path traversal protection (v0.25.0)
 - **Autopilot**: goal Literal constraint, gpu_budget parsed with [1GB, 1TB] bounds (v0.25.0)
 - **MLX trainers**: no trust_remote_code — mlx-lm loads weights directly (v0.25.0)
+- **Registry name/tag validation**: alphanumeric + `_-.` only, null-byte rejected, name ≤128 chars, tag ≤64 (v0.26.0)
+- **Registry artifact path**: default `enforce_cwd=True` uses `os.path.realpath` + `os.path.commonpath` for containment; stored path is also realpath (Windows-safe) (v0.26.0)
+- **Registry SQL**: all user input is parameterised, LIKE wildcards (`%`, `_`) are escaped via ``ESCAPE '\\'`` in `search()` and `resolve()` prefix match (v0.26.0)
+- **Registry DB**: `~/.soup/registry.db` with 600 perms on POSIX; override via `SOUP_REGISTRY_DB_PATH` (v0.26.0)
+- **Registry lineage**: self-reference rejected; indirect cycles detected via BFS ancestor walk before insert (v0.26.0)
+- **Registry CLI**: all output passes through `rich.markup.escape` to prevent markup injection (v0.26.0)
+- **Registry resolve**: ambiguous prefix raises `AmbiguousRefError` instead of silently returning None — prevents operator confusion (v0.26.0)
 
 ## Code Conventions
 
@@ -471,7 +492,7 @@ Commits that only touch `.github/`, `tests/`, or `docs/` don't ship to PyPI and 
 - Forgetting to update test counts in multiple docs after adding tests
 - Forgetting to close GitHub issues that were resolved by the release
 
-## Tests (86 test files, 2313 tests)
+## Tests (87 test files, 2409 tests)
 
 | File | Covers |
 |------|--------|
@@ -559,3 +580,4 @@ Commits that only touch `.github/`, `tests/`, or `docs/` don't ship to PyPI and 
 | test_data_augment.py | Data augmentation: rephrase/translate/style strategies, CLI, security (Part F v0.25.0) |
 | test_training_intelligence.py | Forgetting detection + checkpoint intelligence + SQLite schema (Part G v0.25.0) |
 | test_autopilot.py | Autopilot: dataset/model/hardware analysis, decision engine, CLI (Part H v0.25.0) |
+| test_registry.py | Model Registry: hashing, validation, store CRUD, artifacts, lineage DAG, diff, CLI, history (Part A v0.26.0) |

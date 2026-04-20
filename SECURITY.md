@@ -9,9 +9,9 @@ We provide security updates for the following versions:
 - **Versions older than 3 minor versions:** No support
 
 Example:
-- v0.25.0-0.25.x -- Full support (latest)
-- v0.24.0-0.24.x -- Bug-fix support only
-- v0.23.x and below -- No support
+- v0.26.0-0.26.x -- Full support (latest)
+- v0.25.0-0.25.x -- Bug-fix support only
+- v0.24.x and below -- No support
 
 ## Reporting a Vulnerability
 
@@ -129,6 +129,8 @@ No known critical vulnerabilities in current releases.
 - **v0.24.0**: HF download trust_remote_code=False + warning panel, HF download output path sanitized (Path.name), download --samples capped at 1M, dataset registry name validation (no path separators/null bytes), registry path traversal protection, loss_watchdog threshold le=100 + patience le=1000, freeze_layers le=1000
 - **v0.24.1**: AWQ/GPTQ output path traversal validation moved before import check (previously unreachable when autoawq/auto-gptq not installed), Windows Unicode fix for Rich console output (replaced non-ASCII symbols with ASCII equivalents)
 - **v0.24.2**: Chat proxy SSRF protection (localhost-only HTTP, HTTPS for remote), chat proxy max_tokens capped at 16384 + temperature/top_p bounded, chat proxy Bearer token auth required, XSS prevention (HTML-escape before markdown render), runs compare max 5 runs, config from-form validates via load_config_from_string, SSE read endpoints no auth (GET)
+- **v0.25.0**: Tool-calling JSON-only parsing (no eval), RLVR math_verify regex-extracted numerics (no eval), code_exec 5s timeout + 512MB RLIMIT on POSIX + ephemeral cwd + socket patch + `python -I -S` + 10KB output cap, verifiable_domain Literal constraint, LoRA PEFT mutual exclusion (DoRA/VeRA/OLoRA), data augment path containment + caps, forgetting_detection bounds, checkpoint_intelligence bounds + symlink refusal, autopilot path containment (realpath + commonpath) + goal Literal + GPU/time budget bounds, MLX trainers no trust_remote_code
+- **v0.26.0**: Registry name/tag validation (alphanumeric + `_-.` only, null-byte rejected, name ≤128 / tag ≤64 chars), registry artifact path containment (default `enforce_cwd=True` via `os.path.realpath + commonpath`, stored path is realpath), registry SQL LIKE wildcard escaping (`%` and `_` escaped with `ESCAPE '\\'` in `search()` and prefix `resolve()`), registry DB 600 perms on POSIX, registry lineage indirect-cycle detection (BFS ancestor walk before insert), registry CLI Rich markup escaped everywhere, registry `resolve()` raises `AmbiguousRefError` on ambiguous prefix (no silent None)
 
 ## Security Scanning
 

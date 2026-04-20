@@ -36,6 +36,13 @@ soup init --template chat
 soup train
 ```
 
+### New in v0.26.0 — "Red and Blue Ocean" (Part A)
+
+- **Local Model Registry** — `soup registry push/list/show/diff/search/promote/delete`: track every fine-tune with lineage, config, and eval baseline. SQLite-backed at `~/.soup/registry.db`, foundation of the v0.26.0 flywheel.
+- **`soup history <name>`** — view the full lineage DAG (ancestors + descendants) for any named artifact.
+- **Config + eval diff** — `soup registry diff v1 v2` shows exactly what changed between two recipes, including benchmark deltas.
+- **Security-hardened**: name/tag validation (alphanumeric + `_-.` only), LIKE-wildcard escaping, parameterised SQL, 600 perms on POSIX, Windows-safe path containment via `os.path.realpath`, cycle-safe lineage walks.
+
 ### New in v0.25.0 — "Beyond the Wrapper"
 
 - **`soup autopilot`** — give it a model, a dataset, and a goal; Soup picks the task, quantization, LoRA rank, LR, epochs, and perf flags automatically

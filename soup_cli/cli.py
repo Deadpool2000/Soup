@@ -17,6 +17,7 @@ from soup_cli.commands import (
     eval,
     export,
     generate,
+    history,
     infer,
     init,
     merge,
@@ -24,6 +25,7 @@ from soup_cli.commands import (
     profile,
     push,
     recipes,
+    registry,
     runs,
     serve,
     sweep,
@@ -88,6 +90,11 @@ app.command()(doctor_cmd.doctor)
 app.command()(quickstart_cmd.quickstart)
 app.command()(ui.ui)
 app.command(name="autopilot")(autopilot.autopilot_cmd)
+app.add_typer(
+    registry.app, name="registry",
+    help="Model Registry: push, list, show, diff, search, promote, delete.",
+)
+app.command(name="history")(history.history)
 
 # Register data generate as a subcommand of data
 data.app.command(name="generate")(generate.generate)
