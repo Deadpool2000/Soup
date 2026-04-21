@@ -69,10 +69,42 @@ ZERO_STAGE_2_OFFLOAD = {
 }
 
 
+# ZeRO++ (v0.27.0): stage-3 base + hierarchical partitioning + quantized
+# weights/gradients. Reduces inter-node communication 4-8x on 8+ GPUs.
+ZERO_PLUS_PLUS = {
+    "bf16": {"enabled": True},
+    "zero_optimization": {
+        "stage": 3,
+        "offload_optimizer": {"device": "none"},
+        "offload_param": {"device": "none"},
+        "overlap_comm": True,
+        "contiguous_gradients": True,
+        "sub_group_size": int(1e9),
+        "reduce_bucket_size": "auto",
+        "stage3_prefetch_bucket_size": "auto",
+        "stage3_param_persistence_threshold": "auto",
+        "stage3_max_live_parameters": int(1e9),
+        "stage3_max_reuse_distance": int(1e9),
+        "stage3_gather_16bit_weights_on_model_save": True,
+        # ZeRO++ specifics
+        "zero_hpz_partition_size": 8,
+        "zero_quantized_weights": True,
+        "zero_quantized_gradients": True,
+    },
+    "gradient_accumulation_steps": "auto",
+    "gradient_clipping": "auto",
+    "train_batch_size": "auto",
+    "train_micro_batch_size_per_gpu": "auto",
+    "wall_clock_breakdown": False,
+}
+
+
 CONFIGS = {
     "zero2": ZERO_STAGE_2,
     "zero3": ZERO_STAGE_3,
     "zero2_offload": ZERO_STAGE_2_OFFLOAD,
+    "zero++": ZERO_PLUS_PLUS,
+    "zero_pp": ZERO_PLUS_PLUS,
 }
 
 

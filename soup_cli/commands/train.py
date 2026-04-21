@@ -1,9 +1,11 @@
 """soup train — the main training command."""
 
+import os
 from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape as markup_escape
 from rich.panel import Panel
 
 from soup_cli.config.loader import load_config
@@ -52,12 +54,20 @@ def train(
     deepspeed: str = typer.Option(
         None,
         "--deepspeed",
-        help="Enable DeepSpeed: zero2, zero3, zero2_offload, or path to config JSON",
+        help=(
+            "Enable DeepSpeed: zero2, zero3, zero2_offload, zero++ (ZeRO++), "
+            "or path to config JSON"
+        ),
     ),
     fsdp: str = typer.Option(
         None,
         "--fsdp",
         help="Enable FSDP2: full_shard, shard_grad, or full_offload",
+    ),
+    gpus: str = typer.Option(
+        None,
+        "--gpus",
+        help="Number of GPUs for distributed training ('auto' or integer)",
     ),
     gate: str = typer.Option(
         None,
@@ -169,6 +179,62 @@ def train(
         fsdp_kwargs = get_fsdp_training_args(fsdp)
         console.print(f"[green]FSDP2 enabled:[/] {fsdp}")
 
+    # --- Multi-GPU topology + --gpus resolution ---
+    num_gpus = None
+    if gpus:
+        from soup_cli.utils.topology import detect_topology, resolve_num_gpus
+
+        try:
+            num_gpus = resolve_num_gpus(gpus)
+        except ValueError as exc:
+            console.print(f"[red]Invalid --gpus:[/] {exc}")
+            raise typer.Exit(1) from exc
+        topo = detect_topology()
+        if num_gpus is not None and num_gpus < 1:
+            # --gpus auto on CPU / no-CUDA box — explicit, not silent.
+            console.print(
+                "[yellow]--gpus auto detected 0 GPUs; continuing as a "
+                "single-process CPU run.[/]"
+            )
+        elif num_gpus is not None and num_gpus > 1:
+            from soup_cli.utils.launcher import format_advice, is_in_distributed
+
+            if not is_in_distributed():
+                safe_config = markup_escape(config)
+                console.print(
+                    Panel(
+                        markup_escape(
+                            format_advice(num_gpus, ["soup", "train", "-c", safe_config])
+                        ),
+                        title="[yellow]Multi-GPU launch required[/]",
+                    )
+                )
+                console.print(
+                    f"[dim]Detected topology: {topo['gpu_count']} GPUs, "
+                    f"{topo['interconnect']}[/]"
+                )
+                console.print(
+                    "[dim]Note: carry any additional flags (e.g. --fsdp, "
+                    "--deepspeed, --wandb) over to the accelerate command.[/]"
+                )
+                raise typer.Exit(1)
+            console.print(
+                f"[green]Distributed run detected[/] "
+                f"({num_gpus} procs, {topo['interconnect']} interconnect)"
+            )
+            # Apply NCCL env hints. All current keys (``NCCL_P2P_DISABLE`` /
+            # ``NCCL_IB_DISABLE`` / ``NCCL_NVLS_ENABLE``) are rank-idempotent
+            # string literals so it is safe to run on every rank. If a
+            # rank-sensitive key is ever added to ``suggest_nccl_env``, this
+            # loop must be gated to ``LOCAL_RANK == 0``. ``setdefault`` keeps
+            # user / launcher overrides winning over our suggestions.
+            from soup_cli.utils.topology import suggest_nccl_env
+
+            for key, val in suggest_nccl_env(
+                gpu_count=num_gpus, interconnect=topo["interconnect"]
+            ).items():
+                os.environ.setdefault(key, val)
+
     # Detect hardware
     device, device_name = detect_device()
     gpu_info = get_gpu_info()
@@ -240,6 +306,50 @@ def train(
             console.print(f"[red]FSDP error:[/] {err}")
         if fsdp_errors:
             raise typer.Exit(1)
+
+    # Validate FSDP2 + torch.compile (v0.27.0 Part D)
+    if cfg.training.use_fsdp2_compile:
+        from soup_cli.utils.fsdp import validate_fsdp2_compile_config
+
+        compile_errors = validate_fsdp2_compile_config(
+            use_compile=cfg.training.use_fsdp2_compile,
+            fsdp_preset=fsdp,
+            backend=cfg.backend,
+            device=device,
+            deepspeed_config=ds_config_path,
+        )
+        for err in compile_errors:
+            console.print(f"[red]FSDP2 + torch.compile error:[/] {err}")
+        if compile_errors:
+            raise typer.Exit(1)
+
+    # Validate pipeline parallelism (v0.27.0 Part F)
+    if cfg.training.parallelism == "pipeline":
+        from soup_cli.utils.pipeline import validate_pipeline_config
+
+        pp_errors = validate_pipeline_config(
+            parallelism=cfg.training.parallelism,
+            pipeline_stages=cfg.training.pipeline_stages,
+            device=device,
+            gpu_count=gpu_info.get("gpu_count", 0),
+        )
+        for err in pp_errors:
+            console.print(f"[red]Pipeline parallel error:[/] {err}")
+        if pp_errors:
+            raise typer.Exit(1)
+        console.print(
+            Panel(
+                (
+                    f"Pipeline parallelism is configured "
+                    f"({cfg.training.pipeline_stages} stages) but live "
+                    f"execution wiring ships in v0.27.1. Your config is "
+                    f"validated and the trainer will run in data-parallel "
+                    f"mode for now."
+                ),
+                title="[yellow]Pipeline parallelism (deferred execution)[/]",
+                border_style="yellow",
+            )
+        )
 
     # Validate Liger Kernel configuration
     if cfg.training.use_liger:

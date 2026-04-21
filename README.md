@@ -40,12 +40,12 @@ soup train
 
 Latest highlights only. Full history: [GitHub Releases](https://github.com/MakazhanAlpamys/Soup/releases).
 
-- **Local Model Registry** — `soup registry push/list/show/diff/search/promote/delete` tracks every fine-tune with config, eval baseline, and lineage. `soup history <name>` prints the full DAG.
-- **Eval-Gated Training** — declarative `training.eval_gate` (or `soup train --gate gate.yaml`) halts training on regression vs a baseline. `soup eval gate` for post-hoc verdicts.
-- **Trace-to-Preference** — `soup data from-traces` ingests LangChain / OpenAI / Soup-serve logs and builds DPO/KTO-ready preference pairs from thumbs, regens, or user edits.
-- **Quant-Lobotomy Checker** — `soup eval quant-check --before X --after Y --tasks t.jsonl` gives an OK / MINOR / MAJOR verdict per task before you ship a quant.
-- **Soup Cans** — shareable `.can` artifact format (manifest + config + data ref). `soup can pack/inspect/verify/fork` makes recipes reproducible across machines.
-- **Hardening** — Windows-safe path containment; SQL LIKE-wildcard escaping; SSRF allowlist on judge URLs; HTTPS-only `DataRef`; tar-extraction symlink guard; lineage cycle detection.
+- **Multi-GPU Mastery** — `soup train --gpus auto` auto-detects GPU count and prints the exact `accelerate launch` command with topology (NVLink / PCIe) info.
+- **ZeRO++** — new `--deepspeed zero++` preset with quantized weights / gradients + hierarchical partitioning for 4-8x lower inter-node traffic on 8+ GPUs.
+- **FSDP2 + torch.compile** — `training.use_fsdp2_compile: true` on top of any FSDP preset for +20-30% training throughput.
+- **DeepSpeed-MII backend** — `soup serve --backend mii` is registered and dependency-checked (live pipeline wiring ships in v0.27.1).
+- **Pipeline parallelism config** — declarative `training.parallelism: pipeline` + `pipeline_stages` with bounds + validation (execution wiring ships in v0.27.1).
+- **Multi-GPU recipes** — `llama3-70b-fsdp2`, `qwen3-32b-zeropp`, `deepseek-v3-pipeline` demonstrate the full stack end-to-end.
 
 ## Why Soup?
 
@@ -1453,6 +1453,9 @@ soup train --config soup.yaml --deepspeed zero3
 # DeepSpeed ZeRO Stage 2 with CPU offload (memory-constrained)
 soup train --config soup.yaml --deepspeed zero2_offload
 
+# DeepSpeed ZeRO++ — quantized weights + gradients, hierarchical partitioning
+soup train --config soup.yaml --deepspeed zero++
+
 # FSDP2 Full Shard (native PyTorch, like ZeRO-3)
 soup train --config soup.yaml --fsdp full_shard
 
@@ -1462,6 +1465,43 @@ soup train --config soup.yaml --fsdp shard_grad
 # FSDP2 Full Shard with CPU offload
 soup train --config soup.yaml --fsdp full_offload
 ```
+
+### `--gpus` flag — topology-aware launch
+
+```bash
+# Auto-detect GPU count; print the exact accelerate command
+soup train --config soup.yaml --gpus auto
+
+# Explicit GPU count
+soup train --config soup.yaml --gpus 4
+```
+
+`soup` detects NVLink / PCIe interconnect and prints the correct
+`accelerate launch` command. Copy-paste to start distributed training
+(auto-reexec ships in v0.27.1).
+
+### FSDP2 + `torch.compile`
+
+Stack `torch.compile` on top of any FSDP preset for +20-30% throughput:
+
+```yaml
+# soup.yaml
+training:
+  use_fsdp2_compile: true
+```
+
+Requires `--fsdp`, CUDA, and `backend: transformers`.
+
+### Pipeline parallelism config (wiring only in v0.27.0)
+
+```yaml
+training:
+  parallelism: pipeline
+  pipeline_stages: 4
+```
+
+Config validation ships in v0.27.0; live execution ships in v0.27.1. See
+`recipes/deepseek-v3-pipeline` for a full scaffold.
 
 ## Performance + Long-Context
 
@@ -1769,6 +1809,8 @@ soup init [--template chat|code|...|audio]       Create config
 soup autopilot --model <id> --data d.jsonl --goal <g>  Zero-configsoup train --config soup.yaml                 Start training
 soup train --config soup.yaml --tensorboard   Train with TensorBoard logging
 soup train --config soup.yaml --fsdp full_shard  Train with FSDP2
+soup train --config soup.yaml --deepspeed zero++  DeepSpeed ZeRO++ (quantized comms)
+soup train --config soup.yaml --gpus auto|N      Multi-GPU launch hint
 soup train --config soup.yaml --gate evals/gate.yaml  Eval-gated trainingsoup infer --model ./output --input p.jsonl   Batch inference
 soup chat --model ./output                    Interactive chat
 soup push --model ./output --repo user/name   Upload to HuggingFace
@@ -1792,6 +1834,7 @@ soup eval human --input p.jsonl               Human A/B evaluation
 soup eval gate --suite gate.yaml              Run eval-gate suite standalonesoup eval quant-check --before X --after Y --tasks t.jsonl  Before/after quantsoup serve --model ./output --port 8000       OpenAI-compatible API server
 soup serve --model ./output --backend vllm    vLLM backend (2-4x throughput)
 soup serve --model ./output --backend sglang  SGLang backend
+soup serve --model ./output --backend mii     DeepSpeed-MII backend (registered; live in v0.27.1)
 soup serve --model ./output --speculative-decoding draft-model  Speculative decoding
 soup sweep --config soup.yaml --param lr=...  Hyperparameter search
 soup diff --model-a ./a --model-b ./b         Compare two models

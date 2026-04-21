@@ -93,7 +93,7 @@ def serve(
     backend: str = typer.Option(
         "transformers",
         "--backend",
-        help="Inference backend: transformers (default), vllm, or sglang",
+        help="Inference backend: transformers (default), vllm, sglang, or mii",
     ),
     tensor_parallel: int = typer.Option(
         1,
@@ -137,10 +137,32 @@ def serve(
 
     # Validate backend
     backend = backend.lower()
-    if backend not in ("transformers", "vllm", "sglang"):
+    if backend not in ("transformers", "vllm", "sglang", "mii"):
         console.print(
             f"[red]Unknown backend: {backend}[/]\n"
-            "Supported backends: [bold]transformers[/], [bold]vllm[/], [bold]sglang[/]"
+            "Supported backends: [bold]transformers[/], [bold]vllm[/], "
+            "[bold]sglang[/], [bold]mii[/]"
+        )
+        raise typer.Exit(1)
+
+    # DeepSpeed-MII v0.27.0: dependency check only — live pipeline wiring
+    # ships in v0.27.1 once we stabilize the OpenAI-compat shim. We exit
+    # with code 1 (not 0) so scripts / CI fail loudly rather than silently
+    # treating `--backend mii` as "server started".
+    if backend == "mii":
+        from soup_cli.utils.mii import is_mii_available
+
+        if not is_mii_available():
+            console.print(
+                "[red]deepspeed-mii is not installed.[/]\n"
+                "Install with: [bold]pip install deepspeed-mii[/]"
+            )
+            raise typer.Exit(1)
+        console.print(
+            "[yellow]DeepSpeed-MII backend is registered but not yet wired "
+            "as a live server in v0.27.0. Full pipeline support ships in "
+            "v0.27.1. Use --backend vllm or --backend sglang for production "
+            "in the meantime.[/]"
         )
         raise typer.Exit(1)
 

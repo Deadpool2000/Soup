@@ -163,13 +163,17 @@ class SFTTrainerWrapper:
             "deepspeed": self.deepspeed_config,
         }
 
-        # FSDP2 — alternative to DeepSpeed
-        if self.fsdp_config:
-            allowed_fsdp_keys = {"fsdp", "fsdp_config"}
-            unexpected = set(self.fsdp_config.keys()) - allowed_fsdp_keys
-            if unexpected:
-                raise ValueError(f"Unexpected FSDP config keys: {unexpected}")
-            training_kwargs.update(self.fsdp_config)
+        # FSDP2 — alternative to DeepSpeed. The helper also enables
+        # torch.compile when tcfg.use_fsdp2_compile is True.
+        from soup_cli.utils.fsdp import apply_fsdp_training_kwargs
+
+        apply_fsdp_training_kwargs(
+            training_kwargs,
+            fsdp_config=self.fsdp_config,
+            use_fsdp2_compile=tcfg.use_fsdp2_compile,
+        )
+        if self.fsdp_config and tcfg.use_fsdp2_compile:
+            console.print("[green]torch.compile enabled on FSDP2[/]")
 
         # Gradient checkpointing — saves memory for long sequences
         if tcfg.gradient_checkpointing:

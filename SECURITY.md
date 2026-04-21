@@ -9,9 +9,9 @@ We provide security updates for the following versions:
 - **Versions older than 3 minor versions:** No support
 
 Example:
-- v0.26.0-0.26.x -- Full support (latest)
-- v0.25.0-0.25.x -- Bug-fix support only
-- v0.24.x and below -- No support
+- v0.27.0-0.27.x -- Full support (latest)
+- v0.26.0-0.26.x -- Bug-fix support only
+- v0.25.x and below -- No support
 
 ## Reporting a Vulnerability
 
@@ -135,6 +135,7 @@ No known critical vulnerabilities in current releases.
 - **v0.26.0 — Trace-to-Preference**: input/output path containment via shared `is_under_cwd`, trace line cap 100,000, `--format`/`--signal` Literal validation, PII warning panel before every run, JSON-only parsing (no eval), malformed JSON lines skipped silently
 - **v0.26.0 — Quant-Lobotomy**: `--before`/`--after`/`--tasks` all containment-checked, `registry://` refs support optional `kinds` filter to avoid picking the wrong artifact, format Literal validated
 - **v0.26.0 — Soup Cans**: Manifest format version pinned to 1; name alphanumeric+`_-.`; author max 128 chars, no null bytes/newlines; created_at must parse via `datetime.fromisoformat`; description max 4096; DataRef URL HTTPS-only; hf_dataset regex-validated; tar extraction uses `filter="data"` on Python 3.12+, fallback only on `TypeError`/`AttributeError` (not `TarError`); manual symlink/hardlink rejection + `commonpath` check; 100 MB size cap on pack + fork; dunder-key (`__*__`) and null-byte rejection in fork modifications to prevent prototype pollution; inspect/read_config refuse paths outside cwd
+- **v0.27.0 — Multi-GPU Mastery**: `--gpus` bounds (reject bool, non-digit, zero, negative, values above `MAX_GPU_COUNT=128`); `--gpus auto` on 0-GPU host prints explicit yellow warning (no silent no-op); Rich markup escaped on `--config` path before embedding in the multi-GPU advice Panel; `accelerate launch` argv assembled via `shlex.quote` per element (copy-pasted command safe against crafted paths); `build_accelerate_argv` validates `num_processes >= 1`, `mixed_precision` Literal (`no/fp16/bf16/fp8`), `num_machines` bounded `[1, 256]`; ZeRO++ integer literals (`int(1e9)` not float) so DeepSpeed strict JSON validator accepts; `validate_fsdp2_compile_config` requires FSDP + CUDA + transformers + torch>=2.2/accelerate>=0.27; DeepSpeed-MII stub exits non-zero to prevent silent mis-start; `validate_pipeline_config` enforces `pipeline_stages >= 2` + CUDA + `gpu_count >= stages`; `pipeline_stages` Pydantic bounds `[1, 16]`; `parallelism` Literal `data|pipeline`; NCCL env (`NCCL_P2P_DISABLE`/`NCCL_IB_DISABLE`/`NCCL_NVLS_ENABLE`) applied via `os.environ.setdefault` only — user/launcher overrides are never stomped
 
 ## Security Scanning
 

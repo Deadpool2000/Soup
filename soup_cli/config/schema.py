@@ -388,6 +388,28 @@ class TrainingConfig(BaseModel):
         default=None,
         description="Optional EvalGateConfig — block training on regressions",
     )
+    # Multi-GPU Mastery — v0.27.0
+    use_fsdp2_compile: bool = Field(
+        default=False,
+        description=(
+            "Enable torch.compile on top of FSDP2 for +20-30% training speed. "
+            "Requires --fsdp, CUDA, and backend=transformers."
+        ),
+    )
+    parallelism: Literal["data", "pipeline"] = Field(
+        default="data",
+        description=(
+            "Distributed strategy: 'data' (DDP/FSDP/DeepSpeed) or 'pipeline' "
+            "(pipeline parallel, v0.27.0 wiring only)."
+        ),
+    )
+    pipeline_stages: int = Field(
+        default=1, ge=1, le=16,
+        description=(
+            "Number of pipeline parallel stages. Ignored when "
+            "parallelism='data'."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_verifiable_reward(self) -> "TrainingConfig":

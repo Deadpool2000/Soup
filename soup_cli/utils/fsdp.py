@@ -96,6 +96,41 @@ def get_fsdp_training_args(preset: str) -> dict:
     }
 
 
+def apply_fsdp_training_kwargs(
+    training_kwargs: dict,
+    fsdp_config: dict | None,
+    use_fsdp2_compile: bool,
+) -> dict:
+    """Mutate and return ``training_kwargs`` with FSDP + optional torch.compile.
+
+    Centralizes the "FSDP-block" logic from the trainer wrappers so it can
+    be unit-tested directly without mocking an entire model load.
+
+    Args:
+        training_kwargs: The dict being built for ``TrainingArguments``.
+        fsdp_config: Either ``None`` or a dict with keys ``fsdp`` /
+            ``fsdp_config`` (as returned by :func:`get_fsdp_training_args`).
+        use_fsdp2_compile: Whether ``training.use_fsdp2_compile`` is set.
+
+    Returns:
+        The same ``training_kwargs`` dict (mutated in place).
+
+    Raises:
+        ValueError: If ``fsdp_config`` contains unexpected keys.
+    """
+    if not fsdp_config:
+        return training_kwargs
+
+    allowed = {"fsdp", "fsdp_config"}
+    unexpected = set(fsdp_config.keys()) - allowed
+    if unexpected:
+        raise ValueError(f"Unexpected FSDP config keys: {unexpected}")
+    training_kwargs.update(fsdp_config)
+    if use_fsdp2_compile:
+        training_kwargs["torch_compile"] = True
+    return training_kwargs
+
+
 def is_fsdp_available() -> bool:
     """Check if FSDP2 requirements are met (torch >= 2.2, accelerate >= 0.27)."""
     try:
@@ -117,6 +152,59 @@ def is_fsdp_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def validate_fsdp2_compile_config(
+    use_compile: bool,
+    fsdp_preset: str | None,
+    backend: str,
+    device: str,
+    deepspeed_config: str | None = None,
+) -> list[str]:
+    """Validate FSDP2 + ``torch.compile`` combination.
+
+    Args:
+        use_compile: Whether ``training.use_fsdp2_compile`` is enabled.
+        fsdp_preset: FSDP preset name, or None if FSDP is disabled.
+        backend: Training backend (transformers / unsloth / mlx).
+        device: Training device (cuda / cpu / mps).
+        deepspeed_config: DeepSpeed config path, or None. If set together with
+            ``use_compile``, we reject — DeepSpeed owns its own compile path and
+            combining the two produces a cryptic runtime error.
+
+    Returns:
+        List of error messages. Empty list means valid.
+    """
+    if not use_compile:
+        return []
+
+    errors: list[str] = []
+    if deepspeed_config:
+        errors.append(
+            "use_fsdp2_compile is incompatible with --deepspeed. "
+            "DeepSpeed owns its own torch.compile integration; "
+            "mixing the two crashes at runtime. Pick one."
+        )
+    if not fsdp_preset:
+        errors.append(
+            "use_fsdp2_compile requires FSDP to be enabled. "
+            "Pass --fsdp full_shard (or shard_grad / full_offload)."
+        )
+    if device != "cuda":
+        errors.append(
+            f"use_fsdp2_compile requires CUDA GPUs. Current device: {device}."
+        )
+    if backend != "transformers":
+        errors.append(
+            f"use_fsdp2_compile is only supported with backend=transformers "
+            f"(got {backend!r}); unsloth bakes its own compile path."
+        )
+    if fsdp_preset and not is_fsdp_available():
+        errors.append(
+            "use_fsdp2_compile requires torch >= 2.2.0 and accelerate >= 0.27.0. "
+            "Upgrade with: pip install -U torch accelerate"
+        )
+    return errors
 
 
 def validate_fsdp_config(

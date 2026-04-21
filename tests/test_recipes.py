@@ -269,7 +269,8 @@ class TestV025NewRecipes:
         """
         from soup_cli.recipes.catalog import RECIPES
 
-        assert len(RECIPES) == 43
+        # 43 shipped in v0.25.0; v0.27.0 adds 3 multi-GPU recipes.
+        assert len(RECIPES) == 46
 
     def test_new_recipes_searchable(self):
         """Search returns the new recipes via keyword/task filter."""

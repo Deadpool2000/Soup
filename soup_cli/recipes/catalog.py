@@ -1319,4 +1319,110 @@ training:
 output: ./output
 """,
     ),
+    # ------------------------------------------------------------------
+    # Multi-GPU Mastery recipes (v0.27.0)
+    # ------------------------------------------------------------------
+    "llama3-70b-fsdp2": RecipeMeta(
+        model="meta-llama/Llama-3.1-70B-Instruct",
+        task="sft",
+        size="70B",
+        tags=("llama", "sft", "fsdp2", "multi-gpu", "torch-compile"),
+        description=(
+            "Llama 3.1 70B SFT with FSDP2 full shard + torch.compile. "
+            "Requires 8 x A100/H100 80GB."
+        ),
+        yaml_str="""\
+base: meta-llama/Llama-3.1-70B-Instruct
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 4096
+
+training:
+  epochs: 2
+  lr: 1e-4
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  use_fsdp2_compile: true
+  gradient_checkpointing: true
+
+output: ./output
+""",
+    ),
+    "qwen3-32b-zeropp": RecipeMeta(
+        model="Qwen/Qwen3-32B",
+        task="sft",
+        size="32B",
+        tags=("qwen", "sft", "zeropp", "deepspeed", "multi-gpu"),
+        description=(
+            "Qwen3 32B SFT with DeepSpeed ZeRO++ (quantized gradients + "
+            "hierarchical partitioning). Launch with --deepspeed zero++."
+        ),
+        yaml_str="""\
+base: Qwen/Qwen3-32B
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 4096
+
+training:
+  epochs: 3
+  lr: 2e-4
+  batch_size: 1
+  gradient_accumulation_steps: 16
+  lora:
+    r: 32
+    alpha: 64
+    target_modules: auto
+  quantization: 4bit
+  gradient_checkpointing: true
+
+output: ./output
+""",
+    ),
+    "deepseek-v3-pipeline": RecipeMeta(
+        model="deepseek-ai/DeepSeek-V3",
+        task="sft",
+        size="671B",
+        tags=("deepseek", "sft", "pipeline", "multi-gpu", "moe"),
+        description=(
+            "DeepSeek V3 SFT scaffold with pipeline parallelism (4 stages). "
+            "Pipeline execution wiring ships in v0.27.1."
+        ),
+        yaml_str="""\
+base: deepseek-ai/DeepSeek-V3
+task: sft
+
+data:
+  train: ./data/train.jsonl
+  format: auto
+  max_length: 4096
+
+training:
+  epochs: 1
+  lr: 5e-5
+  batch_size: 1
+  gradient_accumulation_steps: 32
+  lora:
+    r: 16
+    alpha: 32
+    target_modules: auto
+  quantization: 4bit
+  moe_lora: true
+  parallelism: pipeline
+  pipeline_stages: 4
+  gradient_checkpointing: true
+
+output: ./output
+""",
+    ),
 }
