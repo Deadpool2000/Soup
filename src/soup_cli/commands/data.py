@@ -903,6 +903,17 @@ def split_data(
         None, "--stratify",
         help="Field name for stratified splitting (preserves category distribution)",
     ),
+    stratify_semantic: bool = typer.Option(
+        False, "--stratify-semantic",
+        help=(
+            "Use semantic clustering (TF-IDF + K-Means) to perform stratified "
+            "splitting without requiring a category field"
+        ),
+    ),
+    num_clusters: int = typer.Option(
+        5, "--num-clusters",
+        help="Number of semantic clusters to use for semantic stratified splitting (default: 5)",
+    ),
 ):
     """Split dataset into train/val/test files."""
     file_path = Path(path)
@@ -919,6 +930,14 @@ def split_data(
     # train — a silently inverted split).
     if (val is not None and val < 0) or (test is not None and test < 0):
         console.print("[red]--val and --test must be non-negative.[/]")
+        raise typer.Exit(1)
+
+    if stratify and stratify_semantic:
+        console.print("[red]Cannot use --stratify and --stratify-semantic together. Pick one.[/]")
+        raise typer.Exit(1)
+
+    if num_clusters <= 0:
+        console.print("[red]--num-clusters must be a positive integer.[/]")
         raise typer.Exit(1)
 
     data = load_raw_data(file_path)
@@ -950,6 +969,11 @@ def split_data(
     if stratify:
         train_data, val_data, test_data = _stratified_split(
             data, val_count, test_count, stratify, seed=seed,
+        )
+    elif stratify_semantic:
+        labels = _get_semantic_labels(data, num_clusters, seed=seed)
+        train_data, val_data, test_data = _stratified_split(
+            data, val_count, test_count, labels, seed=seed,
         )
     else:
         train_data, val_data, test_data = _random_split(
@@ -1007,15 +1031,64 @@ def _random_split(
     return train_data, val_data, test_data
 
 
+def _get_semantic_labels(
+    data: list[dict], num_clusters: int, seed: int | None = None
+) -> list[str]:
+    """Infers semantic category labels using TF-IDF + K-Means, with length bucketing fallback."""
+    # Extract text representations
+    texts = [
+        " ".join(str(val) for val in row.values() if val) for row in data
+    ]
+    try:
+        from sklearn.cluster import MiniBatchKMeans
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
+        vectorizer = TfidfVectorizer(max_features=1000, stop_words="english")
+        tfidf_matrix = vectorizer.fit_transform(texts)
+
+        actual_clusters = min(num_clusters, len(data))
+        if actual_clusters <= 1:
+            return ["cluster_0"] * len(data)
+
+        kmeans = MiniBatchKMeans(
+            n_clusters=actual_clusters, random_state=seed or 0, n_init=3
+        )
+        labels = kmeans.fit_predict(tfidf_matrix)
+        return [f"cluster_{label}" for label in labels]
+    except ImportError:
+        # Fallback: simple length-based bucketing (complexity proxy)
+        actual_clusters = min(num_clusters, len(data))
+        if actual_clusters <= 1:
+            return ["bucket_0"] * len(data)
+
+        lengths = [len(t) for t in texts]
+        min_len = min(lengths)
+        max_len = max(lengths)
+        if max_len == min_len:
+            return ["bucket_0"] * len(data)
+
+        bucket_width = (max_len - min_len) / actual_clusters
+        labels = []
+        for length in lengths:
+            # Calculate bucket index, handle edge case of maximum length
+            b_idx = int((length - min_len) / bucket_width)
+            b_idx = min(b_idx, actual_clusters - 1)
+            labels.append(f"bucket_{b_idx}")
+        return labels
+
+
 def _stratified_split(
     data: list, val_count: int, test_count: int,
-    stratify_field: str, seed: int | None = None,
+    stratify_keys: str | list[str], seed: int | None = None,
 ) -> tuple:
     """Stratified split preserving category distribution."""
-    # Group by stratify field
+    # Group by stratify keys
     groups: dict[str, list[int]] = {}
     for idx, row in enumerate(data):
-        key = str(row.get(stratify_field, "unknown"))
+        if isinstance(stratify_keys, list):
+            key = str(stratify_keys[idx])
+        else:
+            key = str(row.get(stratify_keys, "unknown"))
         groups.setdefault(key, []).append(idx)
 
     rng = random.Random(seed)
