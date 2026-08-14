@@ -251,11 +251,19 @@ def cuda_supports_bf16() -> bool:
     """Does the current CUDA device support bf16? Ampere (sm_80) and later.
 
     A T4 (sm_75, Colab's free tier), a P100 (Kaggle), a V100, a GTX 16xx or an
-    RTX 20xx does not — and transformers does not degrade there, it refuses:
-    *"Your setup doesn't support bf16/gpu. You need Ampere+ GPU with
-    cuda>=11.0"* while building ``TrainingArguments``. Every trainer wrapper
-    used to spell this as ``bf16=self.device == "cuda"``, so every task died
-    before step 0 on that hardware (#387).
+    RTX 20xx does not. Every trainer wrapper used to spell this as
+    ``bf16=self.device == "cuda"``, so all fourteen of them asked for a dtype
+    the card has no units for (#385, #387).
+
+    This docstring used to say that transformers refuses outright on that
+    hardware, quoting *"Your setup doesn't support bf16/gpu. You need Ampere+
+    GPU with cuda>=11.0"*, and that every task therefore died before step 0.
+    **That was wrong and is retracted in the CHANGELOG**: the error had been
+    produced by a local stub forcing ``is_bf16_supported()`` to False, while
+    transformers gates on the same permissive call described below, which a T4
+    answers True to. So on the current stack nothing raised; the run simply
+    proceeded in an emulated dtype. Established by running it on a real T4
+    rather than by reasoning about one.
 
     One function rather than a per-wrapper expression, and it asks the driver
     rather than comparing a compute-capability number, so it cannot disagree
@@ -264,7 +272,22 @@ def cuda_supports_bf16() -> bool:
     try:
         import torch
 
-        return bool(torch.cuda.is_available() and torch.cuda.is_bf16_supported())
+        if not torch.cuda.is_available():
+            return False
+        try:
+            # NOT the bare call. ``is_bf16_supported()`` defaults to
+            # ``including_emulation=True``, and its fast path (CUDA >= 11 AND
+            # compute capability >= 8) is only the FIRST branch: when that
+            # fails it falls through to merely constructing a bf16 tensor,
+            # which succeeds on a T4 through software emulation. So the default
+            # answers "can this device hold a bf16 value", while every caller
+            # here is asking "does this device have bf16 hardware".
+            return bool(torch.cuda.is_bf16_supported(including_emulation=False))
+        except TypeError:
+            # torch too old for the keyword, and its bare answer is the
+            # permissive one we are trying to avoid — ask the capability.
+            major, _ = torch.cuda.get_device_capability()
+            return major >= 8
     except (ImportError, RuntimeError, AssertionError, OSError):
         # The same narrow set ``sft._resolve_mixed_precision`` already catches —
         # broad ``except Exception`` here would swallow a real CUDA error and
@@ -301,11 +324,16 @@ def get_compute_dtype():
 
     Uses bfloat16 on CUDA GPUs that support it, float16 otherwise.
     On CPU, uses float32 to avoid dtype mismatch errors.
+
+    Delegates the capability question to :func:`cuda_supports_bf16` rather than
+    calling ``is_bf16_supported()`` itself: the bare call includes software
+    EMULATION and answers True on a T4, so this function used to hand bf16 to
+    cards with no bf16 units (#385 follow-up, found on a real T4).
     """
     import torch
 
     if torch.cuda.is_available():
-        if torch.cuda.is_bf16_supported():
+        if cuda_supports_bf16():
             return torch.bfloat16
         return torch.float16
     return torch.float32
