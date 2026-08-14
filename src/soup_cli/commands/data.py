@@ -910,8 +910,8 @@ def split_data(
             "splitting without requiring a category field"
         ),
     ),
-    num_clusters: int = typer.Option(
-        5, "--num-clusters",
+    num_clusters: Optional[int] = typer.Option(
+        None, "--num-clusters",
         help="Number of semantic clusters to use for semantic stratified splitting (default: 5)",
     ),
 ):
@@ -936,9 +936,15 @@ def split_data(
         console.print("[red]Cannot use --stratify and --stratify-semantic together. Pick one.[/]")
         raise typer.Exit(1)
 
-    if num_clusters <= 0:
+    if num_clusters is not None and num_clusters <= 0:
         console.print("[red]--num-clusters must be a positive integer.[/]")
         raise typer.Exit(1)
+
+    if not stratify_semantic and num_clusters is not None:
+        console.print(
+            "[yellow]Warning: --num-clusters was passed but --stratify-semantic is not enabled. "
+            "It will have no effect.[/]"
+        )
 
     data = load_raw_data(file_path)
     if not data:
@@ -971,7 +977,8 @@ def split_data(
             data, val_count, test_count, stratify, seed=seed,
         )
     elif stratify_semantic:
-        labels = _get_semantic_labels(data, num_clusters, seed=seed)
+        resolved_clusters = num_clusters or 5
+        labels = _get_semantic_labels(data, resolved_clusters, seed=seed)
         train_data, val_data, test_data = _stratified_split(
             data, val_count, test_count, labels, seed=seed,
         )
@@ -1034,47 +1041,49 @@ def _random_split(
 def _get_semantic_labels(
     data: list[dict], num_clusters: int, seed: int | None = None
 ) -> list[str]:
-    """Infers semantic category labels using TF-IDF + K-Means, with length bucketing fallback."""
+    """Infers semantic category labels using TF-IDF + K-Means."""
+    # Medium: row count limit to prevent OOM / slowness on pathological datasets
+    if len(data) > 50000:
+        console.print(
+            f"[red]Semantic stratified splitting is capped at 50,000 rows. "
+            f"Got {len(data):,} rows.[/]"
+        )
+        raise typer.Exit(1)
+
     # Extract text representations
     texts = [
         " ".join(str(val) for val in row.values() if val) for row in data
     ]
+
     try:
         from sklearn.cluster import MiniBatchKMeans
         from sklearn.feature_extraction.text import TfidfVectorizer
+    except ImportError:
+        console.print(
+            "[red]Semantic stratified splitting requires scikit-learn.[/]\n"
+            "Install with: [bold]pip install \"soup-cli\\[data]\"[/]"
+        )
+        raise typer.Exit(1)
 
+    try:
         vectorizer = TfidfVectorizer(max_features=1000, stop_words="english")
         tfidf_matrix = vectorizer.fit_transform(texts)
-
-        actual_clusters = min(num_clusters, len(data))
-        if actual_clusters <= 1:
-            return ["cluster_0"] * len(data)
-
-        kmeans = MiniBatchKMeans(
-            n_clusters=actual_clusters, random_state=seed or 0, n_init=3
+    except ValueError as exc:
+        console.print(
+            f"[red]Semantic stratified splitting failed: {exc}[/]\n"
+            "Check that your dataset contains vectorizable words (not just stop words)."
         )
-        labels = kmeans.fit_predict(tfidf_matrix)
-        return [f"cluster_{label}" for label in labels]
-    except ImportError:
-        # Fallback: simple length-based bucketing (complexity proxy)
-        actual_clusters = min(num_clusters, len(data))
-        if actual_clusters <= 1:
-            return ["bucket_0"] * len(data)
+        raise typer.Exit(1)
 
-        lengths = [len(t) for t in texts]
-        min_len = min(lengths)
-        max_len = max(lengths)
-        if max_len == min_len:
-            return ["bucket_0"] * len(data)
+    actual_clusters = min(num_clusters, len(data))
+    if actual_clusters <= 1:
+        return ["cluster_0"] * len(data)
 
-        bucket_width = (max_len - min_len) / actual_clusters
-        labels = []
-        for length in lengths:
-            # Calculate bucket index, handle edge case of maximum length
-            b_idx = int((length - min_len) / bucket_width)
-            b_idx = min(b_idx, actual_clusters - 1)
-            labels.append(f"bucket_{b_idx}")
-        return labels
+    kmeans = MiniBatchKMeans(
+        n_clusters=actual_clusters, random_state=seed or 0, n_init=3
+    )
+    labels = kmeans.fit_predict(tfidf_matrix)
+    return [f"cluster_{label}" for label in labels]
 
 
 def _stratified_split(
