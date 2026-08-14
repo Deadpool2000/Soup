@@ -179,3 +179,103 @@ class TestSemanticSplit:
             in result.output
         )
 
+    def test_semantic_stratification_distribution(self, tmp_path, monkeypatch):
+        """Verify that semantic stratification balances topic distributions."""
+
+        monkeypatch.chdir(tmp_path)
+        coding_texts = [
+            "python programming language coding development",
+            "write python function sort list dictionary",
+            "import json parse file python script",
+            "debug python code trace stack exception error",
+            "object oriented programming python class init self",
+            "list comprehension python map filter reduce lambda",
+            "pip install package python dependencies environment virtualenv",
+            "read csv file pandas dataframe python data science",
+            "python decorator wrapper function arguments return",
+            "asyncio async await coroutine concurrent python multitasking",
+            "flask fastapi web server routing endpoints requests response python",
+            "python unit testing unittest pytest assertions mocks fixtures",
+            "string manipulation regex matching split join search python",
+            "web scraping beautifulsoup scrapy parse html page python",
+            "python sql connection cursor execute queries database select",
+            "multiprocessing multi threading parallel execution python interpreter lock",
+            "django web application framework mvc patterns model view template python",
+            "python script automation shell command execute system path",
+        ]
+        baking_texts = [
+            "bake sourdough bread flour yeast water salt starter recipe",
+            "knead dough fermentation rising proofing baking oven temperature",
+            "pastry dough butter rolling pin baking croissants puff pastry",
+            "chocolate chip cookies baking tray sweet recipe ingredients sugar",
+            "cake decorator frosting piping bag vanilla sponge cake baking tier",
+            "bread maker machine automatic knead rise bake loaf recipe",
+        ]
+
+        rows = []
+        for text in coding_texts:
+            rows.append({"text": text, "category": "code"})
+        for text in baking_texts:
+            rows.append({"text": text, "category": "baking"})
+
+        ds_path = tmp_path / "dataset.jsonl"
+        ds_path.write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+        )
+
+        train_file = tmp_path / "dataset_train.jsonl"
+        val_file = tmp_path / "dataset_val.jsonl"
+        test_file = tmp_path / "dataset_test.jsonl"
+
+        # 1. Run Semantic Stratified Split (under the same seed)
+        result = runner.invoke(
+            app,
+            [
+                "data", "split", str(ds_path),
+                "--val", "25",
+                "--test", "25",
+                "--stratify-semantic",
+                "--num-clusters", "2",
+                "--seed", "42",
+            ],
+        )
+        assert result.exit_code == 0
+
+        val_rows = [
+            json.loads(line) for line in val_file.read_text(encoding="utf-8").splitlines()
+        ]
+        test_rows = [
+            json.loads(line) for line in test_file.read_text(encoding="utf-8").splitlines()
+        ]
+
+        # Verify that both splits contain at least 1 baking prompt (successfully stratified)
+        val_baking = [r["category"] for r in val_rows].count("baking")
+        test_baking = [r["category"] for r in test_rows].count("baking")
+        assert val_baking >= 1
+        assert test_baking >= 1
+
+        # 2. Run Random Split as a Control (under the same seed)
+        train_file.unlink(missing_ok=True)
+        val_file.unlink(missing_ok=True)
+        test_file.unlink(missing_ok=True)
+
+        result_random = runner.invoke(
+            app,
+            [
+                "data", "split", str(ds_path),
+                "--val", "25",
+                "--test", "25",
+                "--seed", "42",
+            ],
+        )
+        assert result_random.exit_code == 0
+
+        val_rows_rand = [
+            json.loads(line) for line in val_file.read_text(encoding="utf-8").splitlines()
+        ]
+        val_baking_rand = [r["category"] for r in val_rows_rand].count("baking")
+
+        # Control assertion: plain random split fails to capture any baking prompts in validation
+        assert val_baking_rand == 0
+
+
