@@ -19,6 +19,95 @@ reproducing 70+ versions of notes.
 ### Fixed
 
 
+- **The MLX `adapter_config.json` shipped `target_modules` unresolved, so a default
+  MLX adapter loaded as a silent no-op (#392).** `_apply_lora` resolved
+  `target_modules: auto` into a local variable and trained the resolved modules; the
+  writer serialised the raw config value, so the shipped file carried
+  `{"keys": ["auto"]}`. On load, `linear_to_lora_layers` matches no module against that
+  and `load_weights(strict=False)` drops every LoRA tensor without a word — generation
+  with the adapter is bit-identical to the base model. `"auto"` is the schema default,
+  so this was every MLX run that did not name its modules by hand, and the file exists
+  precisely to promise the output dir loads with
+  `mlx_lm.load(..., adapter_path=...)`. Both callers now go through one
+  `resolve_mlx_target_keys()`, because two copies of "which modules did we train?" is
+  how they drifted. Reported with a root cause and a control by
+  [@armanbot-jpg](https://github.com/armanbot-jpg): hand-editing `keys` in the saved
+  file makes the very same `adapters.safetensors` produce the tuned behaviour.
+
+## [0.73.1] - 2026-08-14
+
+### Added
+
+- **`training.stream_vram_probe` decides the layer-streaming VRAM pre-flight on a
+  MEASUREMENT instead of the fitted formula (#349).** The pre-flight predicts peak
+  VRAM from a formula fitted to 10 real runs, and its documented contract is that it
+  never under-predicts. Measured through the real `soup train` on an RTX 3050 Laptop
+  (4 GB, Windows, torch 2.5.1) with SmolLM2-135M streamed in bf16 at batch 1, that
+  contract holds at short sequence and then fails:
+
+  | seq | predicted | real peak | ratio |
+  |---|---|---|---|
+  | 4352 | 3.282 GB | 3.036 GB | 1.081x — over-predicts, safe |
+  | 5120 | 3.844 GB | 4.118 GB | **0.934x — under-predicts** |
+  | 6144 | 4.590 GB | 5.830 GB | **0.787x — under by 21%** |
+
+  Under-prediction is the direction that does not announce itself: an OOM on Linux,
+  and on Windows/WDDM a silent spill to host memory. The existing grid could not
+  have caught it — all ten of its rows are at seq 256 or 512, so it varies batch and
+  says nothing about sequence length, and `test_never_under_predicts` has been
+  narrowed to state that scope rather than imply a global guarantee.
+
+  With the flag on, one real forward+backward runs at the configured shape after the
+  streamed model is built and its peak decides; the prediction is printed beside it
+  so a divergence is visible. Measured cost: **1.0-5.3 s** (SmolLM2-135M at 1x1024
+  and 2x2048; Llama-3.1-8B NF4 at 1x512), against a training run of minutes to hours.
+  Off by default — it costs a step, and it can refuse a run the formula accepts.
+
+  Scope is deliberately narrow. **`task: sft` only**: the probe runs a plain causal-LM
+  step, which *is* the SFT step but is not a preference loss, so its agreement with one
+  is not established. Measured at a single matching shape it is conservative there too
+  (6.02 GB against a real DPO step's 5.30 GB, +13.5%) — but one point is not a
+  validation, and a sign flip would mean a gate waving through over-budget runs. It also **cannot overrule a
+  prediction more than 4x over budget**: the largest disagreement ever measured is 21%,
+  so beyond a small multiple the config is simply too big and is refused by arithmetic
+  without touching the GPU. The gate reads `max_memory_allocated`, not
+  `max_memory_reserved` — reserved runs 1.08-1.41x allocated and overshoots what has to
+  fit, and gating on it would refuse this feature's own flagship configuration
+  (Llama-3.1-8B NF4, 3.70 GB reserved against 3.45 GB free, which runs).
+
+  Two readings were tried during this work and **withdrawn as unsupported**, recorded
+  because the tempting inference was wrong twice in one investigation: that preference
+  losses are over-budgeted ~8.8x (it is 1.15x at the budgeted shape — the earlier figure
+  came from rows that realised 142 of a budgeted 2048 tokens), and that the over-budget
+  runs were silently spilling (`num_alloc_retries` was 0 on every shape measured). The
+  mechanism behind the long-sequence divergence is likewise **not claimed**: `seq**2`
+  from the attention score matrix is the obvious candidate and the numbers do not settle
+  it.
+
+### Fixed
+
+- **`training.batch_size` accepted 0 and negative values.** `Union[int, Literal["auto"]]`
+  carried no lower bound, so `batch_size: -4` loaded and then meant whatever each
+  trainer's arithmetic did with it — including the streaming VRAM pre-flight, which
+  multiplies by it. Now rejected at config load. Surfaced by the #349 security review.
+
+### Fixed
+
+- **Layer streaming's VRAM pre-flight now actually calls its own calibration hook (#348).**
+  `calibrated_logits_bytes_per_element()` exists to raise the budget when a stack's loss
+  path measures a heavier retention than the shipped constant assumes, guarding against a
+  future stack silently under-budgeting by 12.5% with nothing to catch it. `_stream_budget_lines`
+  called `estimate_stream_peak_vram()` without `logits_bytes_per_element=`, so the parameter
+  was always `None` and the calibration never ran outside its own test. It is now forwarded to
+  both the budget and the panel's `logits` figure; the value can only raise the prediction
+  (floored at the shipped constant), and the panel prints an extra line naming both numbers
+  when the calibration measures above it. This makes the probe unconditional rather than
+  opt-in (see #327 below, whose wording is updated to match): every streamed run now pays
+  one transient `14 * vocab_size * max(tokens)` allocation (96 MiB at the defaults) plus two
+  `torch.cuda.synchronize()` calls before the fit decision is taken. On today's measured
+  stacks this is a no-op in effect (`measured` is 12.0 with zero spread, `max(14, 14)` is
+  14, no extra line prints), so the cost buys nothing yet, which is the point of a guard
+  against a stack that hasn't shipped.
 - **MLX backend now actually dispatches to the MLX trainer for `task: sft`.** Previously `backend: mlx` silently fell through to the transformers `SFTTrainerWrapper`, training on MPS/CUDA instead of MLX. The trainer was also rewritten for mlx-lm >= 0.31 (`create_dataset` + `CacheDataset`, `TrainingCallback`), with `model.freeze()` before LoRA — without it the saved "adapter" was a full fine-tune (172 tensors vs 24 LoRA tensors on a 1.2B model) — and an `adapter_config.json` is written so the output dir loads directly with `mlx_lm.load(..., adapter_path=dir)`. (#362)
 - **`mlx-lm` floor raised to >= 0.31.3** (the version the MLX SFT path is built against).
 - **`training.seed` reached the SFT wrapper and nothing else (#353).** #341 added the
@@ -92,7 +181,31 @@ reproducing 70+ versions of notes.
   `named_buffers()` carry the same segment and are deliberately not covered — the
   comparison that produced the false green was over parameter names.
 
+### Added
+
+- **`training.stream_vram_override` gives the layer-streaming VRAM pre-flight an
+  explicit escape hatch (#347).** `decide_stream_fit` refused any run it predicted
+  would not fit, with no way through except lowering `batch_size` or `max_length`.
+  Setting this field now replaces the measured free-VRAM figure the pre-flight
+  checks against, in either direction: raised past a documented over-prediction to
+  let a known-safe config through, or lowered to enforce a cap `mem_get_info()`
+  cannot see, such as `set_per_process_memory_fraction` on a shared or capped card
+  (a Colab/Kaggle T4, a MIG slice). Rejected at config load when set while
+  `stream_layers` is false, mirroring the existing `stream_source`/`stream_buffers`
+  footgun gate.
+
 ### Fixed
+
+- **A hosted notebook's preinstalled `torchao` made `get_peft_model` raise, and it read as a
+  Soup bug (#389).** `peft`'s `is_torchao_available()` does not return False on a version it
+  considers too old, it **raises `ImportError`** — nine frames inside `get_peft_model`, with
+  nothing near the top of the traceback naming `torchao`. Colab preinstalls `torchao` 0.10.0
+  against a `peft` that demands newer, so the first `soup train` on a free notebook died in a
+  place unrelated to anything the user had configured. Now mapped in `utils/errors.py` to the
+  cause and the one-line fix (`pip uninstall -y torchao`), with the part worth saying out
+  loud: Soup does not need `torchao` at all unless `training.quantization_aware` is set.
+  Found by running `notebooks/proof-4gb.ipynb` on a real free-tier session, which is the same
+  place #385's first repair was caught being a no-op.
 
 - **bf16 was assumed on every CUDA card, so the entire free GPU tier failed (#385, #387).**
   Fourteen places, and only the first was known: `trainer/stream_setup.py` chose the
@@ -108,11 +221,24 @@ reproducing 70+ versions of notes.
   `utils/gpu.bf16_fp16_flags`, including ASR, whose private copy was folded in. bf16 needs
   Ampere.
   **Colab's free tier is a T4 (sm_75), Kaggle is a T4 or a P100, and V100 / GTX 16xx / RTX 20xx
-  are all pre-Ampere**, so on that hardware a streamed run streamed a dtype the card cannot
-  compute in, and *any* `soup train` — streamed or not — died before step 0 with
-  transformers' *"Your setup doesn't support bf16/gpu. You need Ampere+ GPU with cuda>=11.0"*.
+  are all pre-Ampere**, so on that hardware Soup ran in a dtype the card has no units for.
   Neither could fail on the maintainer's RTX 3050, which is Ampere; this is the same shape as
   the four backends the H100 session found had never executed once.
+
+  **Two corrections to the first version of this entry, both established by finally running
+  it on a real T4 rather than reasoning about one.** (1) The claim that every task *died before
+  step 0* on transformers' *"Your setup doesn't support bf16/gpu"* was wrong: that error was
+  produced by a local stub forcing `is_bf16_supported()` to False, and transformers gates on
+  the same permissive call described next, so on the current stack it does not raise at all.
+  (2) More seriously, **the first fix was a no-op on the hardware it was written for.**
+  `torch.cuda.is_bf16_supported()` defaults to `including_emulation=True`: when its
+  compute-capability fast path fails it falls through to merely *constructing* a bf16 tensor,
+  which software emulation satisfies — so a T4 answers **True**, and asking the bare question
+  selected bf16 exactly as the hardcoded literal had. The predicate now asks
+  `is_bf16_supported(including_emulation=False)` (falling back to a capability check on older
+  torch), and `get_compute_dtype` — a second copy of the same question — was folded into it.
+  What a T4 actually *does* with emulated bf16, as opposed to what it reports, is not yet
+  measured.
   **This cannot regress a working setup**: where bf16 is supported the answer is unchanged,
   and where it is not the previous behaviour was a crash. A test SCANS every module in
   `soup_cli/trainer/` rather than parametrising over a hand-written list — the list is what
@@ -149,6 +275,40 @@ reproducing 70+ versions of notes.
   in the v0.73.0 notes below is **annotated in place rather than deleted**, because in a folder
   whose whole premise is publishing the record as written, a silent deletion costs more
   credibility than the error does.
+
+### Validation (measured, not changed)
+
+- **Layer streaming completed a run on hardware the maintainer does not own: a free-tier
+  Colab Tesla T4 (sm_75, Turing), via [`notebooks/proof-4gb.ipynb`](notebooks/proof-4gb.ipynb).**
+  Every streaming number this project has published came from one RTX 3050 Laptop or one
+  borrowed 8×H100, and the pre-Ampere fix above (#385, #387) had been verified *using* fp16
+  on an Ampere card, which establishes the plumbing and not the Turing kernels. This closes
+  that specific gap and nothing wider. `NousResearch/Meta-Llama-3.1-8B-Instruct`, NF4,
+  `stream_layers: true`, `stream_buffers: 2`, batch 1, `max_length: 256`, LoRA r=8/α=16,
+  fp16 (a T4 has no bf16 units): 7 steps, exit 0, adapter written with **128 tensors, 128 of
+  them non-zero**, and a **measured peak of 2.91 GB** against the pre-flight's predicted
+  ~3.02 GB — an over-prediction of **3.8%**, which is the direction the estimator was fitted
+  to err in (v0.72.3 fitted it to never under-predict) and is the whole reason it is allowed
+  to stop a run. The card has 15.6 GB, so the run was constrained artificially with
+  `torch.cuda.set_per_process_memory_fraction` to **4.00 GB**, and the cap was shown to bite
+  rather than assumed: a deliberate 4.29 GiB allocation was refused. That artificial cap is
+  also the reason **no throughput figure is quoted from this run, here or in the notebook** —
+  a capped card is not a benchmark, and the panel's own forecast (31–46 tok/s from 2.20 TFLOPS
+  measured at 1185 MHz) is a compute bound, not a measurement of what the run did.
+  Two things the run did **not** establish, stated because the temptation is to let the exit
+  code cover them. **Backward/gradient exactness at 8B on Turing is not shown** — a non-zero
+  adapter proves gradients flowed, not that they were right, and the streamed-vs-resident
+  comparison in the notebook's section 4 produced **no captured output**, so it is recorded as
+  unrun rather than as a pass. And the loss moving 4.5266 → 4.0674 over 7 steps, non-monotonically
+  (4.5266, 4.2388, 3.7485, 4.6930, 4.1940, 4.1127, 4.0674), is reported because it is what the
+  run printed; over seven steps it is not evidence of learning.
+  One observation worth carrying forward: the pre-flight panel reported **free VRAM 15.10 GB**,
+  i.e. it read the device and not the per-process cap the run was actually held to, so the fit
+  decision was taken against a number 3.8× larger than the budget in force. The run fit on its
+  own merits (2.91 GB against 4.00 GB), so nothing was protected by luck — but on that hardware
+  the pre-flight is not what would have caught an over-budget config, which is exactly the case
+  `training.stream_vram_override` (#347, above) exists for. Record:
+  `benchmarks/run-t4-colab-free-tier.md`.
 
 ## [0.73.0] - 2026-08-09
 
@@ -305,10 +465,12 @@ exist, and repairs four backends.
 - **`LOGITS_BYTES_PER_ELEMENT` is split into two independently measured terms** (#327).
   The 14 is 12 + 2, measured stage by stage on an H100 with zero spread across three
   repeats, and only the 2 differs between stacks. It is deliberately **not lowered** —
-  see Known Limitations. What is new is an opt-in, upward-only calibration
+  see Known Limitations. What is new is an upward-only calibration
   (`max(14, measured + 2)`), which closes a real unguarded hole: a future stack that
   grew a fourth fp32 buffer would be under-budgeted by 12.5% today with nothing to catch
   it. Default behaviour is byte-identical and the pre-flight path takes no new CUDA.
+  (Originally landed as an opt-in probe with no caller; #348 above wires it into the
+  pre-flight itself, so it now runs on every streamed run rather than sitting inert.)
 
 ### Fixed — eval, ship and export
 
@@ -2557,5 +2719,6 @@ what a fine-tune forgets and leaks.
   `SECURITY.md` (~220 KB). `SECURITY.md` is now a concise security policy; the
   detailed hardening notes remain in git history and the GitHub Releases notes.
 
-[Unreleased]: https://github.com/MakazhanAlpamys/Soup/compare/v0.71.0...HEAD
+[Unreleased]: https://github.com/MakazhanAlpamys/Soup/compare/v0.73.1...HEAD
+[0.73.1]: https://github.com/MakazhanAlpamys/Soup/compare/v0.73.0...v0.73.1
 [0.71.0]: https://github.com/MakazhanAlpamys/Soup/compare/v0.70.0...v0.71.0
