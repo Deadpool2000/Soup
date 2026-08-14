@@ -12,7 +12,12 @@ reproducing 70+ versions of notes.
 
 ## [Unreleased]
 
+### Added
+
+- **Semantic Stratified Splitting for `soup data split` command.** Adds `--stratify-semantic` and `--num-clusters` options to automatically partition dataset splits proportionally across semantic groups using TF-IDF + K-Means clustering. Includes validation checks, ValueError safety, a 50,000-row cap, and a warnings module.
+
 ### Fixed
+
 
 - **MLX backend now actually dispatches to the MLX trainer for `task: sft`.** Previously `backend: mlx` silently fell through to the transformers `SFTTrainerWrapper`, training on MPS/CUDA instead of MLX. The trainer was also rewritten for mlx-lm >= 0.31 (`create_dataset` + `CacheDataset`, `TrainingCallback`), with `model.freeze()` before LoRA — without it the saved "adapter" was a full fine-tune (172 tensors vs 24 LoRA tensors on a 1.2B model) — and an `adapter_config.json` is written so the output dir loads directly with `mlx_lm.load(..., adapter_path=dir)`. (#362)
 - **`mlx-lm` floor raised to >= 0.31.3** (the version the MLX SFT path is built against).
