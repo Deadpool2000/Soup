@@ -7,7 +7,6 @@ import pytest
 from typer.testing import CliRunner
 
 from soup_cli.cli import app
-from soup_cli.commands.data import _get_semantic_labels
 
 runner = CliRunner()
 
@@ -104,24 +103,79 @@ class TestSemanticSplit:
         assert len(val_rows) > 0
         assert len(test_rows) > 0
 
-    def test_get_semantic_labels_fallback(self, monkeypatch):
-        """Test fallback to length bucketing when sklearn is missing."""
+    def test_semantic_split_missing_dependency(self, dummy_dataset, monkeypatch):
+        """Test that missing scikit-learn prints an install hint and exits 1."""
         import sys
-        # Hide sklearn to force ImportError
         monkeypatch.setitem(sys.modules, "sklearn.cluster", None)
         monkeypatch.setitem(sys.modules, "sklearn.feature_extraction.text", None)
 
-        data = [
-            {"text": "Short text"},
-            {"text": "Medium length text here"},
-            {"text": "Very long text that spans across multiple words and sentences for bucketing"},
-        ]
+        result = runner.invoke(
+            app,
+            [
+                "data", "split", str(dummy_dataset),
+                "--val", "20",
+                "--stratify-semantic",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "requires scikit-learn" in result.output
+        assert "pip install" in result.output
 
-        labels = _get_semantic_labels(data, num_clusters=3)
-        assert len(labels) == 3
-        # Should return bucket-based labels
-        assert all(label.startswith("bucket_") for label in labels)
+    def test_semantic_split_empty_vocabulary(self, tmp_path, monkeypatch):
+        """Test ValueError handling when documents only contain stop words."""
+        monkeypatch.chdir(tmp_path)
+        ds_path = tmp_path / "stop_words.jsonl"
+        # Only stop words or single characters (TfidfVectorizer will ignore)
+        rows = [{"text": "the a and of"}, {"text": "a of"}, {"text": "and the"}]
+        ds_path.write_text(
+            "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+        )
+        result = runner.invoke(
+            app,
+            [
+                "data", "split", str(ds_path),
+                "--val", "30",
+                "--stratify-semantic",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "only contain stop words" in result.output
 
-        # Test edge case with single element / single cluster
-        labels_single = _get_semantic_labels(data, num_clusters=1)
-        assert labels_single == ["bucket_0", "bucket_0", "bucket_0"]
+    def test_semantic_split_row_limit(self, tmp_path, monkeypatch):
+        """Test row cap limits (capped at 50k rows)."""
+        monkeypatch.chdir(tmp_path)
+        ds_path = tmp_path / "large.jsonl"
+        # Write dummy file so the file exists validation passes
+        ds_path.write_text("{}", encoding="utf-8")
+        # Mock load_raw_data to return a list of 50001 items without writing a huge file
+        import soup_cli.commands.data as data_mod
+        monkeypatch.setattr(data_mod, "load_raw_data", lambda path: [{"text": "a"}] * 50001)
+
+        result = runner.invoke(
+            app,
+            [
+                "data", "split", str(ds_path),
+                "--val", "20",
+                "--stratify-semantic",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "capped at 50,000 rows" in result.output
+
+
+    def test_num_clusters_warning(self, dummy_dataset):
+        """Warning is printed when --num-clusters is passed without --stratify-semantic."""
+        result = runner.invoke(
+            app,
+            [
+                "data", "split", str(dummy_dataset),
+                "--val", "20",
+                "--num-clusters", "3",
+            ],
+        )
+        assert result.exit_code == 0
+        assert (
+            "Warning: --num-clusters was passed but --stratify-semantic is not enabled"
+            in result.output
+        )
+
