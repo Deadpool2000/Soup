@@ -118,10 +118,11 @@ def clean(
     except ValueError:
         fmt = "plaintext"
 
-    console.print(
-        f"[dim]Cleaning {len(data)} rows in [bold]{fmt}[/] format "
-        f"({'DRY RUN' if dry_run else 'LIVE'})...[/]"
-    )
+    if not json_output:
+        console.print(
+            f"[dim]Cleaning {len(data)} rows in [bold]{fmt}[/] format "
+            f"({'DRY RUN' if dry_run else 'LIVE'})...[/]"
+        )
 
     cleaned_data, report = clean_dataset(
         data,
@@ -132,6 +133,27 @@ def clean(
         repair_json=repair_json,
         drop_invalid_json=drop_invalid_json,
     )
+
+    output_path = None
+    if not dry_run:
+        if output is None:
+            output_path = file_path.with_name(f"{file_path.stem}_cleaned{file_path.suffix}")
+        else:
+            output_path = Path(output)
+
+        if not is_under_cwd(output_path):
+            console.print(
+                f"[red]Output path must be under the current working directory:[/] {output_path}"
+            )
+            raise typer.Exit(1)
+
+        try:
+            jsonl_lines = [json.dumps(row, ensure_ascii=False) for row in cleaned_data]
+            content = "\n".join(jsonl_lines) + ("\n" if jsonl_lines else "")
+            atomic_write_text(content, str(output_path))
+        except Exception as exc:
+            console.print(f"[red]Failed to write output file:[/] {escape(str(exc))}")
+            raise typer.Exit(1) from exc
 
     if json_output:
         summary_payload = {
@@ -161,27 +183,8 @@ def clean(
         console.print("\n[yellow]Dry-run mode:[/] No files were written.")
         return
 
-    # Resolve output path
-    if output is None:
-        output_path = file_path.with_name(f"{file_path.stem}_cleaned{file_path.suffix}")
-    else:
-        output_path = Path(output)
-
-    if not is_under_cwd(output_path):
-        console.print(
-            f"[red]Output path must be under the current working directory:[/] {output_path}"
-        )
-        raise typer.Exit(1)
-
-    try:
-        jsonl_lines = [json.dumps(row, ensure_ascii=False) for row in cleaned_data]
-        content = "\n".join(jsonl_lines) + ("\n" if jsonl_lines else "")
-        atomic_write_text(output_path, content)
+    if output_path is not None:
         console.print(
             f"\n[bold green]✓ Cleaned dataset saved to:[/] {output_path} "
             f"({len(cleaned_data)} rows)"
         )
-    except Exception as exc:
-        console.print(f"[red]Failed to write output file:[/] {escape(str(exc))}")
-        raise typer.Exit(1) from exc
-
