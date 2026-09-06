@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from soup_cli.cli import app
 from soup_cli.utils.data_clean import (
     CleanReport,
     clean_dataset,
@@ -17,6 +19,8 @@ from soup_cli.utils.data_clean import (
     sanitize_text,
     strip_boilerplate,
 )
+
+runner = CliRunner()
 
 
 def _create_sample_dirty_file(directory: Path) -> Path:
@@ -247,6 +251,7 @@ def test_clean_dataset_batch():
     ]
 
     cleaned_data, report = clean_dataset(data, "chatml")
+    assert isinstance(report, CleanReport)
     assert len(cleaned_data) == 2
     assert report.total_scanned == 3
     assert report.total_clean == 1
@@ -258,11 +263,6 @@ def test_clean_dataset_batch():
 
 def test_cli_clean_command_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Test full soup data clean CLI command."""
-    typer = pytest.importorskip("typer")
-    from typer.testing import CliRunner
-    from soup_cli.cli import app
-
-    runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     dirty_file = _create_sample_dirty_file(tmp_path)
     output_file = tmp_path / "cleaned_output.jsonl"
@@ -283,11 +283,6 @@ def test_cli_clean_command_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 def test_cli_clean_command_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Test soup data clean with --dry-run flag (no file written)."""
-    typer = pytest.importorskip("typer")
-    from typer.testing import CliRunner
-    from soup_cli.cli import app
-
-    runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     dirty_file = _create_sample_dirty_file(tmp_path)
     output_file = tmp_path / "should_not_exist.jsonl"
@@ -302,11 +297,6 @@ def test_cli_clean_command_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 def test_cli_clean_command_json_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Test soup data clean with --json flag."""
-    typer = pytest.importorskip("typer")
-    from typer.testing import CliRunner
-    from soup_cli.cli import app
-
-    runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     dirty_file = _create_sample_dirty_file(tmp_path)
 
@@ -319,4 +309,3 @@ def test_cli_clean_command_json_output(tmp_path: Path, monkeypatch: pytest.Monke
     assert payload["total_scanned"] == 3
     assert payload["output_rows"] == 2
     assert payload["total_dropped"] == 1
-
