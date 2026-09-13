@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,13 @@ from soup_cli.utils.data_clean import (
 )
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI escape sequences from terminal output."""
+    return _ANSI_RE.sub("", text)
 
 
 def _hash_file(path: Path) -> str:
@@ -173,6 +181,34 @@ def test_clean_row_chatml_with_heuristics():
     assert assistant_msg.endswith("```")
 
 
+def test_clean_row_preserves_unknown_keys_and_roles():
+    """B1: Verify clean_row preserves unknown keys ('train', 'name') and roles ('developer')."""
+    row = {
+        "custom_id": "row_12345",
+        "metadata": {"source": "synthetic"},
+        "messages": [
+            {"role": "developer", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello", "name": "bob"},
+            {"role": "assistant", "content": "Hi Bob!", "train": False},
+        ],
+    }
+    cleaned, rules = clean_row(row, "chatml")
+    assert cleaned is not None
+    assert len(rules) == 0  # 100% clean row
+
+    # Assert row-level keys are strictly preserved
+    assert cleaned["custom_id"] == "row_12345"
+    assert cleaned["metadata"] == {"source": "synthetic"}
+
+    # Assert message-level keys and roles are strictly preserved
+    assert cleaned["messages"][0]["role"] == "developer"
+    assert cleaned["messages"][1]["name"] == "bob"
+    assert cleaned["messages"][2]["train"] is False
+
+    # Byte-identical verification
+    assert json.dumps(cleaned) == json.dumps(row)
+
+
 def test_clean_row_alpaca():
     """Test cleaning an Alpaca row with opt-in boilerplate stripping."""
     row = {
@@ -247,7 +283,7 @@ def test_echo_preserved_by_default_and_pruned_with_opt_in():
 
 
 def test_byte_identity_clean_rows_and_arithmetic_closure():
-    """Verify byte-identity for clean rows and arithmetic closure of report accounting."""
+    """Verify byte-identity for clean rows and arithmetic closure of report accounting (S1)."""
     clean_row_data = {
         "messages": [
             {"role": "user", "content": "What is 2+2?"},
@@ -286,6 +322,9 @@ def test_byte_identity_clean_rows_and_arithmetic_closure():
 
     # Exact arithmetic closure check
     assert report.total_scanned == report.total_clean + report.total_modified + report.total_dropped
+
+    # Rule counts sum matches modified + dropped rules
+    assert sum(report.rule_counts.values()) == report.total_modified + report.total_dropped
 
     # Output dataset preserves non-dropped rows (clean + modified) in original sequence
     assert len(cleaned_data) == 3
@@ -373,8 +412,134 @@ def test_cli_rejects_inplace_output_overwrite(tmp_path: Path, monkeypatch: pytes
         ["data", "clean", str(dirty_file), "-o", str(dirty_file)],
     )
     assert result.exit_code == 1
-    assert "Output path cannot be the same as input path" in result.output
+    assert "Output path cannot be the same as input path" in _strip_ansi(result.output)
     assert _hash_file(dirty_file) == initial_hash
+
+
+def test_cli_rejects_existing_output_without_force(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify that writing to an existing output file is rejected without --force."""
+    monkeypatch.chdir(tmp_path)
+    dirty_file = _create_sample_dirty_file(tmp_path)
+    existing_file = tmp_path / "existing.jsonl"
+    existing_file.write_text("PRECIOUS_DATA\n", encoding="utf-8")
+
+    # Rejected without --force
+    result = runner.invoke(
+        app,
+        ["data", "clean", str(dirty_file), "-o", str(existing_file)],
+    )
+    assert result.exit_code == 1
+    assert "Output file already exists" in _strip_ansi(result.output)
+    assert existing_file.read_text(encoding="utf-8") == "PRECIOUS_DATA\n"
+
+    # Accepted with --force
+    result_force = runner.invoke(
+        app,
+        ["data", "clean", str(dirty_file), "-o", str(existing_file), "--force"],
+    )
+    assert result_force.exit_code == 0
+    assert "PRECIOUS_DATA" not in existing_file.read_text(encoding="utf-8")
+
+
+def test_cli_rejects_output_outside_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify that specifying an output path outside current working directory is rejected."""
+    monkeypatch.chdir(tmp_path)
+    dirty_file = _create_sample_dirty_file(tmp_path)
+    outside_output = tmp_path.parent / "outside_output.jsonl"
+
+    result = runner.invoke(
+        app,
+        ["data", "clean", str(dirty_file), "-o", str(outside_output)],
+    )
+    assert result.exit_code == 1
+    assert "Output path must be under the current working directory" in _strip_ansi(result.output)
+    assert not outside_output.exists()
+
+
+def test_cli_uses_atomic_write_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify that atomic_write_text is called to perform safe atomic output writing."""
+    import soup_cli.commands.data_clean as data_clean_mod
+
+    monkeypatch.chdir(tmp_path)
+    dirty_file = _create_sample_dirty_file(tmp_path)
+    output_file = tmp_path / "out_atomic.jsonl"
+
+    calls = []
+    original_atomic = data_clean_mod.atomic_write_text
+
+    def mock_atomic(text: str, output_path: str, **kwargs):
+        calls.append((text, output_path))
+        return original_atomic(text, output_path, **kwargs)
+
+    monkeypatch.setattr(data_clean_mod, "atomic_write_text", mock_atomic)
+
+    result = runner.invoke(
+        app,
+        ["data", "clean", str(dirty_file), "-o", str(output_file)],
+    )
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0][1] == str(output_file)
+    assert output_file.exists()
+
+
+def test_cli_preserves_echo_by_default_and_prunes_with_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Verify that CLI preserves echo turns by default (prune_echo=False) and prunes on flag."""
+    monkeypatch.chdir(tmp_path)
+    echo_file = tmp_path / "echo_dataset.jsonl"
+    data = [
+        {
+            "messages": [
+                {"role": "user", "content": "What is Python?"},
+                {"role": "assistant", "content": "What is Python?"},
+            ]
+        }
+    ]
+    with open(echo_file, "w", encoding="utf-8") as f:
+        f.write(json.dumps(data[0]) + "\n")
+
+    # 1. Default invocation: preserved
+    out_default = tmp_path / "echo_cleaned.jsonl"
+    res_default = runner.invoke(app, ["data", "clean", str(echo_file), "-o", str(out_default)])
+    assert res_default.exit_code == 0
+    with open(out_default, encoding="utf-8") as f:
+        lines = [json.loads(line) for line in f if line.strip()]
+    assert len(lines) == 1
+
+    # 2. Opt-in invocation with --prune-echo: pruned
+    out_pruned = tmp_path / "echo_pruned.jsonl"
+    res_pruned = runner.invoke(
+        app,
+        ["data", "clean", str(echo_file), "-o", str(out_pruned), "--prune-echo"],
+    )
+    assert res_pruned.exit_code == 0
+    with open(out_pruned, encoding="utf-8") as f:
+        lines_pruned = [json.loads(line) for line in f if line.strip()]
+    assert len(lines_pruned) == 0
+
+
+def test_cli_panel_clean_count_math(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """B4: Verify header panel displays report.total_clean rather than len(cleaned_data)."""
+    monkeypatch.chdir(tmp_path)
+    dirty_file = _create_sample_dirty_file(tmp_path)
+    output_file = tmp_path / "out_panel.jsonl"
+
+    result = runner.invoke(
+        app,
+        ["data", "clean", str(dirty_file), "-o", str(output_file)],
+    )
+    assert result.exit_code == 0
+    output_text = _strip_ansi(result.output)
+
+    # Scanned: 3 | Modified: 1 | Dropped: 1 | Clean: 1
+    assert "Scanned: 3" in output_text
+    assert "Modified: 1" in output_text
+    assert "Dropped: 1" in output_text
+    assert "Clean: 1" in output_text
 
 
 def test_cli_clean_command_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -411,7 +576,11 @@ def test_cli_clean_command_json_output(tmp_path: Path, monkeypatch: pytest.Monke
         ["data", "clean", str(dirty_file), "--dry-run", "--json"],
     )
     assert result.exit_code == 0
-    payload = json.loads(result.output)
+    payload = json.loads(_strip_ansi(result.output))
     assert payload["total_scanned"] == 3
     assert payload["output_rows"] == 2
     assert payload["total_dropped"] == 1
+    assert payload["total_clean"] == 1
+    assert payload["total_modified"] == 1
+    assert payload["dry_run"] is True
+

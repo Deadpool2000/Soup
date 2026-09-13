@@ -180,7 +180,7 @@ def clean_row(
     repair_json: bool = False,
     drop_invalid_json: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], List[str]]:
-    """Clean a single row according to its format.
+    """Clean a single row according to its format, preserving all unknown keys & roles.
 
     Returns:
         A tuple of (cleaned_row_or_None, list_of_rules_applied).
@@ -189,45 +189,56 @@ def clean_row(
     applied_rules: List[str] = []
 
     if fmt == "tool-calling" or "tool_calls" in row:
-        # Tool calling clean (messages + tool_calls arguments)
         cleaned_row = dict(row)
         tool_calls = row.get("tool_calls", [])
         if isinstance(tool_calls, list):
             cleaned_calls: List[Dict[str, Any]] = []
             for call in tool_calls:
                 if not isinstance(call, dict):
+                    cleaned_calls.append(call)
                     continue
-                args = call.get("arguments", "")
-                if isinstance(args, str) and repair_json:
-                    san_args, _ = sanitize_text(args)
-                    repaired_args, was_repaired = repair_json_string(san_args)
-                    if was_repaired:
-                        applied_rules.append("Malformed JSON in Tools")
-                        call = dict(call)
-                        call["arguments"] = repaired_args
-                    elif drop_invalid_json:
-                        try:
-                            json.loads(san_args)
-                        except (json.JSONDecodeError, ValueError):
-                            return None, ["Invalid JSON in Tool Calls"]
-                cleaned_calls.append(call)
-            cleaned_row["tool_calls"] = cleaned_calls
-
-        # Also sanitize messages if present
-        if "messages" in row and isinstance(row["messages"], list):
-            cleaned_messages: List[Dict[str, Any]] = []
-            for msg in row["messages"]:
-                if not isinstance(msg, dict):
-                    continue
-                role = str(msg.get("role", "")).strip()
-                content = msg.get("content")
-                if content is not None:
-                    san_c, was_san = sanitize_text(str(content))
+                c = dict(call)
+                args = c.get("arguments", "")
+                if isinstance(args, str):
+                    san_args, was_san = sanitize_text(args)
                     if was_san:
                         applied_rules.append("Invisible & Control Chars")
-                else:
-                    san_c = None
-                cleaned_messages.append({"role": role, "content": san_c})
+                    if repair_json:
+                        repaired_args, was_repaired = repair_json_string(san_args)
+                        if was_repaired:
+                            applied_rules.append("Malformed JSON in Tools")
+                            c["arguments"] = repaired_args
+                        else:
+                            c["arguments"] = san_args
+                            if drop_invalid_json:
+                                try:
+                                    json.loads(san_args)
+                                except (json.JSONDecodeError, ValueError):
+                                    return None, ["Invalid JSON in Tool Calls"]
+                    else:
+                        c["arguments"] = san_args
+                        if drop_invalid_json:
+                            try:
+                                json.loads(san_args)
+                            except (json.JSONDecodeError, ValueError):
+                                return None, ["Invalid JSON in Tool Calls"]
+                cleaned_calls.append(c)
+            cleaned_row["tool_calls"] = cleaned_calls
+
+        if "messages" in row and isinstance(row["messages"], list):
+            cleaned_messages = []
+            for msg in row["messages"]:
+                if not isinstance(msg, dict):
+                    cleaned_messages.append(msg)
+                    continue
+                m = dict(msg)
+                content = m.get("content")
+                if isinstance(content, str):
+                    san_c, was_san = sanitize_text(content)
+                    if was_san:
+                        applied_rules.append("Invisible & Control Chars")
+                    m["content"] = san_c
+                cleaned_messages.append(m)
             cleaned_row["messages"] = cleaned_messages
 
         return cleaned_row, list(dict.fromkeys(applied_rules))
@@ -242,49 +253,44 @@ def clean_row(
 
         for message in messages:
             if not isinstance(message, dict):
+                cleaned_messages.append(message)
                 continue
-            role = str(message.get("role", "")).strip()
-            content = message.get("content")
 
-            if content is None:
-                content = ""
-            elif not isinstance(content, str):
-                content = str(content)
+            msg = dict(message)
+            role = str(msg.get("role", "")).strip()
+            content = msg.get("content")
 
-            # Sanitize control characters
-            sanitized_content, was_sanitized = sanitize_text(content)
-            if was_sanitized:
-                applied_rules.append("Invisible & Control Chars")
+            if isinstance(content, str):
+                sanitized_content, was_sanitized = sanitize_text(content)
+                if was_sanitized:
+                    applied_rules.append("Invisible & Control Chars")
 
-            if role == "user":
-                user_prompt = sanitized_content
-                cleaned_messages.append({"role": role, "content": sanitized_content})
-            elif role == "assistant":
-                # Check for echo turn (opt-in)
-                if prune_echo and user_prompt and is_echo_turn(user_prompt, sanitized_content):
-                    return None, ["Target Leakage / Echo"]
+                if role == "user":
+                    user_prompt = sanitized_content
+                    msg["content"] = sanitized_content
+                elif role == "assistant":
+                    if prune_echo and user_prompt and is_echo_turn(user_prompt, sanitized_content):
+                        return None, ["Target Leakage / Echo"]
 
-                # Boilerplate stripping
-                if strip_ai_boilerplate:
-                    sanitized_content, was_boilerplate = strip_boilerplate(sanitized_content)
-                    if was_boilerplate:
-                        applied_rules.append("Boilerplate Disclaimers")
+                    if strip_ai_boilerplate:
+                        sanitized_content, was_bp = strip_boilerplate(sanitized_content)
+                        if was_bp:
+                            applied_rules.append("Boilerplate Disclaimers")
 
-                # Code fence balancing
-                if repair_code:
-                    sanitized_content, was_code_repaired = repair_code_fences(sanitized_content)
-                    if was_code_repaired:
-                        applied_rules.append("Markdown Code Fence Repair")
+                    if repair_code:
+                        sanitized_content, was_cr = repair_code_fences(sanitized_content)
+                        if was_cr:
+                            applied_rules.append("Markdown Code Fence Repair")
 
-                # Empty or short check
-                if len(sanitized_content.strip()) < min_tokens:
-                    return None, ["Empty / Whitespace Turns"]
+                    if len(sanitized_content.strip()) < min_tokens:
+                        return None, ["Empty / Whitespace Turns"]
 
-                cleaned_messages.append({"role": role, "content": sanitized_content})
-            elif role in ("system", "tool", "function"):
-                cleaned_messages.append({"role": role, "content": sanitized_content})
+                    msg["content"] = sanitized_content
+                else:
+                    msg["content"] = sanitized_content
+            cleaned_messages.append(msg)
 
-        if not any(m.get("role") == "assistant" for m in cleaned_messages):
+        if not any(isinstance(m, dict) and m.get("role") == "assistant" for m in cleaned_messages):
             return None, ["Empty / Whitespace Turns"]
 
         cleaned_row = dict(row)
@@ -292,35 +298,46 @@ def clean_row(
         return cleaned_row, list(dict.fromkeys(applied_rules))
 
     elif fmt == "alpaca" or ("instruction" in row and "output" in row):
-        instruction = str(row.get("instruction", ""))
-        input_text = str(row.get("input", ""))
-        output_text = str(row.get("output", ""))
+        cleaned_row = dict(row)
+        instruction = row.get("instruction", "")
+        input_text = row.get("input", "")
+        output_text = row.get("output", "")
 
-        san_inst, inst_san = sanitize_text(instruction)
-        san_in, in_san = sanitize_text(input_text)
-        san_out, out_san = sanitize_text(output_text)
+        if isinstance(instruction, str):
+            san_inst, inst_san = sanitize_text(instruction)
+        else:
+            san_inst, inst_san = instruction, False
+
+        if isinstance(input_text, str):
+            san_in, in_san = sanitize_text(input_text)
+        else:
+            san_in, in_san = input_text, False
+
+        if isinstance(output_text, str):
+            san_out, out_san = sanitize_text(output_text)
+        else:
+            san_out, out_san = output_text, False
 
         if inst_san or in_san or out_san:
             applied_rules.append("Invisible & Control Chars")
 
-        prompt_combined = (san_inst + "\n" + san_in).strip()
-        if prune_echo and is_echo_turn(prompt_combined, san_out):
+        prompt_combined = (str(san_inst) + "\n" + str(san_in)).strip()
+        if prune_echo and is_echo_turn(prompt_combined, str(san_out)):
             return None, ["Target Leakage / Echo"]
 
-        if strip_ai_boilerplate:
+        if strip_ai_boilerplate and isinstance(san_out, str):
             san_out, was_boilerplate = strip_boilerplate(san_out)
             if was_boilerplate:
                 applied_rules.append("Boilerplate Disclaimers")
 
-        if repair_code:
+        if repair_code and isinstance(san_out, str):
             san_out, was_code_repaired = repair_code_fences(san_out)
             if was_code_repaired:
                 applied_rules.append("Markdown Code Fence Repair")
 
-        if len(san_out.strip()) < min_tokens:
+        if isinstance(san_out, str) and len(san_out.strip()) < min_tokens:
             return None, ["Empty / Whitespace Turns"]
 
-        cleaned_row = dict(row)
         cleaned_row["instruction"] = san_inst
         cleaned_row["input"] = san_in
         cleaned_row["output"] = san_out
@@ -338,39 +355,47 @@ def clean_row(
 
         for turn in conversations:
             if not isinstance(turn, dict):
+                cleaned_convs.append(turn)
                 continue
-            from_role = str(turn.get("from", "")).strip()
-            value = str(turn.get("value", ""))
 
-            san_val, was_sanitized = sanitize_text(value)
-            if was_sanitized:
-                applied_rules.append("Invisible & Control Chars")
+            t = dict(turn)
+            from_role = str(t.get("from", "")).strip()
+            value = t.get("value")
 
-            if from_role in ("human", "user"):
-                last_human = san_val
-                cleaned_convs.append({"from": from_role, "value": san_val})
-            elif from_role in ("gpt", "assistant", "chatgpt"):
-                if prune_echo and last_human and is_echo_turn(last_human, san_val):
-                    return None, ["Target Leakage / Echo"]
+            if isinstance(value, str):
+                san_val, was_sanitized = sanitize_text(value)
+                if was_sanitized:
+                    applied_rules.append("Invisible & Control Chars")
 
-                if strip_ai_boilerplate:
-                    san_val, was_boilerplate = strip_boilerplate(san_val)
-                    if was_boilerplate:
-                        applied_rules.append("Boilerplate Disclaimers")
+                if from_role in ("human", "user"):
+                    last_human = san_val
+                    t["value"] = san_val
+                elif from_role in ("gpt", "assistant", "chatgpt"):
+                    if prune_echo and last_human and is_echo_turn(last_human, san_val):
+                        return None, ["Target Leakage / Echo"]
 
-                if repair_code:
-                    san_val, was_code_repaired = repair_code_fences(san_val)
-                    if was_code_repaired:
-                        applied_rules.append("Markdown Code Fence Repair")
+                    if strip_ai_boilerplate:
+                        san_val, was_boilerplate = strip_boilerplate(san_val)
+                        if was_boilerplate:
+                            applied_rules.append("Boilerplate Disclaimers")
 
-                if len(san_val.strip()) < min_tokens:
-                    return None, ["Empty / Whitespace Turns"]
+                    if repair_code:
+                        san_val, was_code_repaired = repair_code_fences(san_val)
+                        if was_code_repaired:
+                            applied_rules.append("Markdown Code Fence Repair")
 
-                cleaned_convs.append({"from": from_role, "value": san_val})
-            else:
-                cleaned_convs.append({"from": from_role, "value": san_val})
+                    if len(san_val.strip()) < min_tokens:
+                        return None, ["Empty / Whitespace Turns"]
 
-        if not any(t.get("from") in ("gpt", "assistant", "chatgpt") for t in cleaned_convs):
+                    t["value"] = san_val
+                else:
+                    t["value"] = san_val
+            cleaned_convs.append(t)
+
+        if not any(
+            isinstance(t, dict) and t.get("from") in ("gpt", "assistant", "chatgpt")
+            for t in cleaned_convs
+        ):
             return None, ["Empty / Whitespace Turns"]
 
         cleaned_row = dict(row)
@@ -378,47 +403,52 @@ def clean_row(
         return cleaned_row, list(dict.fromkeys(applied_rules))
 
     elif fmt in ("dpo", "kto"):
-        prompt = str(row.get("prompt", ""))
-        chosen = str(row.get("chosen", "") or row.get("completion", ""))
-        rejected = str(row.get("rejected", ""))
-
-        san_p, p_san = sanitize_text(prompt)
-        san_c, c_san = sanitize_text(chosen)
-        san_r, r_san = sanitize_text(rejected)
-
-        if p_san or c_san or r_san:
-            applied_rules.append("Invisible & Control Chars")
-
-        if repair_code:
-            san_c, c_rep = repair_code_fences(san_c)
-            san_r, r_rep = repair_code_fences(san_r)
-            if c_rep or r_rep:
-                applied_rules.append("Markdown Code Fence Repair")
-
-        if len(san_c.strip()) < min_tokens:
-            return None, ["Empty / Whitespace Turns"]
-
         cleaned_row = dict(row)
-        cleaned_row["prompt"] = san_p
-        if "chosen" in row:
-            cleaned_row["chosen"] = san_c
-        if "completion" in row:
-            cleaned_row["completion"] = san_c
-        if "rejected" in row:
+        prompt = row.get("prompt")
+        chosen = row.get("chosen", "") or row.get("completion", "")
+        rejected = row.get("rejected")
+
+        if isinstance(prompt, str):
+            san_p, p_san = sanitize_text(prompt)
+            if p_san:
+                applied_rules.append("Invisible & Control Chars")
+            cleaned_row["prompt"] = san_p
+
+        if isinstance(chosen, str):
+            san_c, c_san = sanitize_text(chosen)
+            if c_san:
+                applied_rules.append("Invisible & Control Chars")
+            if repair_code:
+                san_c, c_rep = repair_code_fences(san_c)
+                if c_rep:
+                    applied_rules.append("Markdown Code Fence Repair")
+            if len(san_c.strip()) < min_tokens:
+                return None, ["Empty / Whitespace Turns"]
+            if "chosen" in row:
+                cleaned_row["chosen"] = san_c
+            if "completion" in row:
+                cleaned_row["completion"] = san_c
+
+        if isinstance(rejected, str):
+            san_r, r_san = sanitize_text(rejected)
+            if r_san:
+                applied_rules.append("Invisible & Control Chars")
+            if repair_code:
+                san_r, r_rep = repair_code_fences(san_r)
+                if r_rep:
+                    applied_rules.append("Markdown Code Fence Repair")
             cleaned_row["rejected"] = san_r
 
         return cleaned_row, list(dict.fromkeys(applied_rules))
 
     # Plaintext or unknown format fallback: clean control characters
-    cleaned_row = {}
+    cleaned_row = dict(row)
     for key, val in row.items():
         if isinstance(val, str):
             san_val, was_san = sanitize_text(val)
             if was_san:
                 applied_rules.append("Invisible & Control Chars")
             cleaned_row[key] = san_val
-        else:
-            cleaned_row[key] = val
 
     return cleaned_row, list(dict.fromkeys(applied_rules))
 

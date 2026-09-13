@@ -12,6 +12,7 @@ Applies deterministic data cleaning rules:
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -54,6 +55,12 @@ def clean(
         "--output",
         "-o",
         help="Path to write cleaned dataset (default: <input>_cleaned.jsonl)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Overwrite output file if it already exists",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -160,6 +167,13 @@ def clean(
             )
             raise typer.Exit(1)
 
+        if output_path.exists() and not force:
+            console.print(
+                f"[red]Output file already exists:[/] {output_path} "
+                "(use --force / -f to overwrite)"
+            )
+            raise typer.Exit(1)
+
         try:
             jsonl_lines = [json.dumps(row, ensure_ascii=False) for row in cleaned_data]
             content = "\n".join(jsonl_lines) + ("\n" if jsonl_lines else "")
@@ -178,7 +192,7 @@ def clean(
             "rule_counts": report.rule_counts,
             "dry_run": dry_run,
         }
-        console.print(json.dumps(summary_payload, indent=2))
+        sys.stdout.write(json.dumps(summary_payload, indent=2) + "\n")
         return
 
     # Render Rich header panel
@@ -186,7 +200,7 @@ def clean(
         f"Scanned: [bold]{report.total_scanned}[/] rows | "
         f"Modified: [yellow]{report.total_modified}[/] | "
         f"Dropped: [red]{report.total_dropped}[/] | "
-        f"Clean: [green]{len(cleaned_data)}[/]"
+        f"Clean: [green]{report.total_clean}[/]"
     )
     console.print(Panel.fit(header_text, title="soup data clean"))
 
