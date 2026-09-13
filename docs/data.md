@@ -788,7 +788,7 @@ soup data filter ./data/train.jsonl --coherence 0.3
 soup data filter ./data/train.jsonl --perplexity 500 --coherence 0.3
 soup data filter ./data/train.jsonl --score-only  # add scores without filtering
 
-# Clean and repair dataset (fences, control chars, AI boilerplate, JSON)
+# Clean dataset (control chars, zero-width spaces, empty turns; opt-in heuristics)
 soup data clean ./data/train.jsonl
 soup data clean ./data/train.jsonl -o ./data/clean.jsonl --dry-run
 ```

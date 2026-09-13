@@ -1,4 +1,4 @@
-"""Unit tests for Feature 3: Automated Dataset Cleaning & Sanity Repair Pipeline."""
+"""Unit tests for Automated Dataset Cleaning & Sanity Repair Pipeline."""
 
 from __future__ import annotations
 
@@ -28,8 +28,9 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 
 def _strip_ansi(text: str) -> str:
-    """Strip ANSI escape sequences from terminal output."""
-    return _ANSI_RE.sub("", text)
+    """Strip ANSI escape sequences and collapse whitespace."""
+    no_ansi = _ANSI_RE.sub("", text)
+    return re.sub(r"\s+", " ", no_ansi).strip()
 
 
 def _hash_file(path: Path) -> str:
@@ -222,6 +223,18 @@ def test_clean_row_alpaca():
     assert cleaned["output"] == "Gravity is a fundamental force."
 
 
+def test_clean_row_alpaca_no_input_key_no_synthesis():
+    """Verify alpaca row without 'input' key does not synthesize 'input' key."""
+    row = {"instruction": "Say hi", "output": "hi", "custom": "keep"}
+    cleaned, rules = clean_row(row, "alpaca")
+    assert cleaned is not None
+    assert len(rules) == 0
+    assert "input" not in cleaned
+    assert cleaned == row
+    assert json.dumps(cleaned) == json.dumps(row)
+
+
+
 def test_clean_row_sharegpt():
     """Test cleaning a ShareGPT row with opt-in boilerplate stripping."""
     row = {
@@ -323,8 +336,10 @@ def test_byte_identity_clean_rows_and_arithmetic_closure():
     # Exact arithmetic closure check
     assert report.total_scanned == report.total_clean + report.total_modified + report.total_dropped
 
-    # Rule counts sum matches modified + dropped rules
-    assert sum(report.rule_counts.values()) == report.total_modified + report.total_dropped
+    # Rule counts sum matches or exceeds modified + dropped rules
+    # (multiple rules can trigger on one row)
+    assert sum(report.rule_counts.values()) >= report.total_modified + report.total_dropped
+    assert all(count > 0 for count in report.rule_counts.values())
 
     # Output dataset preserves non-dropped rows (clean + modified) in original sequence
     assert len(cleaned_data) == 3
@@ -414,6 +429,16 @@ def test_cli_rejects_inplace_output_overwrite(tmp_path: Path, monkeypatch: pytes
     assert result.exit_code == 1
     assert "Output path cannot be the same as input path" in _strip_ansi(result.output)
     assert _hash_file(dirty_file) == initial_hash
+
+
+def test_cli_rejects_negative_min_tokens(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Verify CLI rejects negative --min-tokens values."""
+    monkeypatch.chdir(tmp_path)
+    dirty_file = _create_sample_dirty_file(tmp_path)
+    result = runner.invoke(app, ["data", "clean", str(dirty_file), "--min-tokens", "-5"])
+    assert result.exit_code == 1
+    assert "Invalid --min-tokens value" in _strip_ansi(result.output)
+
 
 
 def test_cli_rejects_existing_output_without_force(

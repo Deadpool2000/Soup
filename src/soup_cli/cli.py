@@ -532,7 +532,7 @@ from soup_cli.commands import data_canary as _data_canary_cmd  # noqa: E402
 
 data.app.add_typer(_data_canary_cmd.app, name="canary")
 
-# Feature 3 — Automated Dataset Cleaning & Sanity Repair Pipeline.
+# Automated Dataset Cleaning & Sanity Repair Pipeline.
 from soup_cli.commands import data_clean as _data_clean_cmd  # noqa: E402
 
 data.app.command(name="clean")(_data_clean_cmd.clean)

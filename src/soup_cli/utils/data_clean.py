@@ -1,4 +1,4 @@
-"""Pure dataset cleaning and sanity repair engine (Feature 3).
+"""Pure dataset cleaning and sanity repair engine.
 
 Provides format-aware dataset sanitization:
 1. Control character & invisible space stripping (C0 controls, zero-width spaces, CRLF)
@@ -299,30 +299,25 @@ def clean_row(
 
     elif fmt == "alpaca" or ("instruction" in row and "output" in row):
         cleaned_row = dict(row)
-        instruction = row.get("instruction", "")
-        input_text = row.get("input", "")
-        output_text = row.get("output", "")
+        instruction = row.get("instruction")
+        input_text = row.get("input")
+        output_text = row.get("output")
+
+        inst_san, in_san, out_san = False, False, False
+        san_inst, san_in, san_out = instruction, input_text, output_text
 
         if isinstance(instruction, str):
             san_inst, inst_san = sanitize_text(instruction)
-        else:
-            san_inst, inst_san = instruction, False
-
         if isinstance(input_text, str):
             san_in, in_san = sanitize_text(input_text)
-        else:
-            san_in, in_san = input_text, False
-
         if isinstance(output_text, str):
             san_out, out_san = sanitize_text(output_text)
-        else:
-            san_out, out_san = output_text, False
 
         if inst_san or in_san or out_san:
             applied_rules.append("Invisible & Control Chars")
 
-        prompt_combined = (str(san_inst) + "\n" + str(san_in)).strip()
-        if prune_echo and is_echo_turn(prompt_combined, str(san_out)):
+        prompt_combined = (str(san_inst or "") + "\n" + str(san_in or "")).strip()
+        if prune_echo and is_echo_turn(prompt_combined, str(san_out or "")):
             return None, ["Target Leakage / Echo"]
 
         if strip_ai_boilerplate and isinstance(san_out, str):
@@ -338,9 +333,12 @@ def clean_row(
         if isinstance(san_out, str) and len(san_out.strip()) < min_tokens:
             return None, ["Empty / Whitespace Turns"]
 
-        cleaned_row["instruction"] = san_inst
-        cleaned_row["input"] = san_in
-        cleaned_row["output"] = san_out
+        if "instruction" in row:
+            cleaned_row["instruction"] = san_inst
+        if "input" in row:
+            cleaned_row["input"] = san_in
+        if "output" in row:
+            cleaned_row["output"] = san_out
         return cleaned_row, list(dict.fromkeys(applied_rules))
 
     elif fmt == "sharegpt" or (
@@ -405,7 +403,8 @@ def clean_row(
     elif fmt in ("dpo", "kto"):
         cleaned_row = dict(row)
         prompt = row.get("prompt")
-        chosen = row.get("chosen", "") or row.get("completion", "")
+        chosen = row.get("chosen")
+        completion = row.get("completion")
         rejected = row.get("rejected")
 
         if isinstance(prompt, str):
@@ -414,8 +413,9 @@ def clean_row(
                 applied_rules.append("Invisible & Control Chars")
             cleaned_row["prompt"] = san_p
 
-        if isinstance(chosen, str):
-            san_c, c_san = sanitize_text(chosen)
+        target_chosen = chosen if "chosen" in row else completion
+        if isinstance(target_chosen, str):
+            san_c, c_san = sanitize_text(target_chosen)
             if c_san:
                 applied_rules.append("Invisible & Control Chars")
             if repair_code:
@@ -484,8 +484,10 @@ def clean_dataset(
             for rule in rules:
                 report.record_rule(rule)
         else:
-            if rules:
+            if rules or cleaned != row:
                 report.total_modified += 1
+                if not rules:
+                    report.record_rule("Format Normalization")
                 for rule in rules:
                     report.record_rule(rule)
             else:

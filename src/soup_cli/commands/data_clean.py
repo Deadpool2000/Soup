@@ -1,4 +1,4 @@
-"""soup data clean — dataset cleaning and sanity repair CLI (Feature 3).
+"""soup data clean — dataset cleaning and sanity repair CLI.
 
 Applies deterministic data cleaning rules:
 - Invisible control character and zero-width space sanitization
@@ -104,6 +104,10 @@ def clean(
     ),
 ) -> None:
     """Clean and repair a fine-tuning dataset: control characters, whitespace, format sanity."""
+    if min_tokens < 0:
+        console.print(f"[red]Invalid --min-tokens value:[/] {min_tokens} (must be >= 0)")
+        raise typer.Exit(1)
+
     file_path = Path(path)
     if not file_path.exists():
         console.print(f"[red]File not found:[/] {file_path}")
