@@ -9,7 +9,7 @@
 ```
 soup init [--template chat|code|...|audio]       Create config
 soup init --template hipaa|soc2|eu-ai-act|sr-11-7  Compliance-shaped starting config + the commands for that regime (v0.71.35)
-soup autopilot --model <id> --data d.jsonl --goal <g>  Zero-config: pick task/quant/LR/epochs from data + model + goal
+soup autopilot [--model <id>] [--data d.jsonl] [--goal <g>]  Zero-config: pick task/quant/LR/epochs (prompts when omitted)
 soup advise <data> --goal "..."               Pre-flight decision: PROMPT_ENG / RAG / SFT / DPO / GRPO — run BEFORE spending GPU hours
 soup advise compare                           Show prior verdicts from advise history
 soup advise explain                           Rubric + evidence trail of the last verdict
