@@ -521,7 +521,6 @@ class TestAutopilotCLI:
         assert "Dataset path cannot be empty." in _plain(result.output)
 
 
-
 # ---------------------------------------------------------------------------
 # GPU budget parsing
 # ---------------------------------------------------------------------------
