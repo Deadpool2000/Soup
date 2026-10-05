@@ -395,6 +395,20 @@ also covers `soup bench`, which loads through the `soup infer` path).
 Values are case-insensitive. Any other value (`gpu`, `auto`, `cuda:0,1`, ...)
 is refused with an error instead of being ignored.
 
+### Interactive Autopilot (`soup autopilot`)
+
+When standard input is an interactive terminal and any of `--model`, `--data`, or `--goal`
+are omitted, `soup autopilot` prompts for the missing values:
+
+- **Model**: Base model Hugging Face repository ID (or local path). Blank entries are refused.
+- **Data**: Local training dataset path (JSONL). Must exist under current working directory.
+- **Goal**: One of `chat`, `reasoning`, `code`, `classification`, `tool-calling`, `alignment`,
+  or `domain-adapt`.
+
+When run with all three options supplied, or when standard input is not a terminal (e.g. CI,
+scripts, or pipelines), `soup autopilot` never prompts: complete flags execute directly,
+and omitted required flags exit with code 2 and the standard `Missing option` error.
+
 ### Best-of-N recovery and publication
 
 `soup data best-of-n` appends and synchronizes one checkpoint record after each

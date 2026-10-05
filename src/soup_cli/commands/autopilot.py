@@ -119,8 +119,18 @@ def autopilot_cmd(
 
     if model is None:
         model = Prompt.ask("Base model (HF model id)")
+    if not model or not model.strip():
+        console.print("[red]Base model cannot be empty.[/]")
+        raise typer.Exit(1)
+    model = model.strip()
+
     if data is None:
         data = Prompt.ask("Dataset path (JSONL)")
+    if not data or not data.strip():
+        console.print("[red]Dataset path cannot be empty.[/]")
+        raise typer.Exit(1)
+    data = data.strip()
+
     if goal is None:
         goal = Prompt.ask(
             "Goal",

@@ -447,17 +447,18 @@ class TestAutopilotCLI:
         inputs = [
             "meta-llama/Llama-3.1-8B-Instruct",
             str(data_file.name),
-            "chat",
+            "reasoning",
         ]
         result = runner.invoke(
             app,
-            ["autopilot", "--dry-run"],
+            ["autopilot", "--dry-run", "--gpu-budget", "24GB"],
             input="\n".join(inputs) + "\n",
         )
         assert result.exit_code == 0, (result.output, repr(result.exception))
         plain_out = _plain(result.output)
         assert "Soup Autopilot" in plain_out
         assert "meta-llama/Llama-3.1-8B-Instruct" in plain_out
+        assert "task: grpo" in plain_out
 
     def test_interactive_prompts_missing_goal_only(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -469,6 +470,7 @@ class TestAutopilotCLI:
                 "autopilot",
                 "--model", "meta-llama/Llama-3.1-8B-Instruct",
                 "--data", str(data_file.name),
+                "--gpu-budget", "24GB",
                 "--dry-run",
             ],
             input="reasoning\n",
@@ -476,6 +478,47 @@ class TestAutopilotCLI:
         assert result.exit_code == 0, (result.output, repr(result.exception))
         plain_out = _plain(result.output)
         assert "task: grpo" in plain_out
+
+    def test_interactive_mode_does_not_prompt_when_all_flags_given(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        data_file = self._write_data(tmp_path)
+        monkeypatch.setattr("soup_cli.commands.autopilot._stdin_isatty", lambda: True)
+
+        def _fail_on_prompt(*args, **kwargs):
+            pytest.fail(f"Prompt.ask called unexpectedly: {args}, {kwargs}")
+
+        monkeypatch.setattr("soup_cli.commands.autopilot.Prompt.ask", _fail_on_prompt)
+
+        result = runner.invoke(
+            app,
+            [
+                "autopilot",
+                "--model", "meta-llama/Llama-3.1-8B-Instruct",
+                "--data", str(data_file.name),
+                "--goal", "chat",
+                "--gpu-budget", "24GB",
+                "--dry-run",
+            ],
+        )
+        assert result.exit_code == 0, (result.output, repr(result.exception))
+
+    def test_interactive_empty_model_exits_1(self, monkeypatch):
+        monkeypatch.setattr("soup_cli.commands.autopilot._stdin_isatty", lambda: True)
+        result = runner.invoke(app, ["autopilot"], input="\n")
+        assert result.exit_code == 1
+        assert "Base model cannot be empty." in _plain(result.output)
+
+    def test_interactive_empty_data_exits_1(self, monkeypatch):
+        monkeypatch.setattr("soup_cli.commands.autopilot._stdin_isatty", lambda: True)
+        result = runner.invoke(
+            app,
+            ["autopilot", "--model", "meta-llama/Llama-3.1-8B-Instruct"],
+            input="\n",
+        )
+        assert result.exit_code == 1
+        assert "Dataset path cannot be empty." in _plain(result.output)
 
 
 
